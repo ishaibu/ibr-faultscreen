@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ibr-faultscreen"
+version = "0.1.0"
+description = "Fault-scenario screening for grids with inverter-based resources"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Shaibu Ibrahim" }]
+keywords = ["power systems", "inverter-based resources", "transient stability", "fault screening", "interconnection"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "andes>=2.0,<3",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "pyyaml>=6",
+    "scikit-learn>=1.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.urls]
+Repository = "https://github.com/ishaibu/ibr-faultscreen"
+
+[tool.setuptools.package-data]
+ibr_faultscreen = ["data/*.yaml"]
+
+[project.scripts]
+ibr-faultscreen = "ibr_faultscreen.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

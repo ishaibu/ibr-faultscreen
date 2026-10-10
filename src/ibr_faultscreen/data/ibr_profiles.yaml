@@ -1,0 +1,89 @@
+# IBR model parameter profiles (REGCA1 + REECA1 + REPCA1 in ANDES).
+#
+# Each profile lists only the parameters it changes from the base, which is the
+# ANDES ieee14_solar example (ANDES 2.0.0). Values are per unit on the IBR's own
+# MVA rating unless noted. The inverter current limit (Imax), the voltage-
+# dependent current tables and PMIN/PMAX are always set by IBR-FaultScreen from
+# each IBR's settings, so they are not in these profiles. The same applies to the
+# lower reactive-current limit Iolim, always set to -Imax (the ANDES example's 0
+# would stop an IBR from absorbing reactive power).
+#
+# Control-mode flags (PFFLAG, VFLAG, QFLAG, PQFLAG, RefFlag, VCFlag) are kept from
+# the ANDES example in every profile: their meaning in ANDES has not been
+# cross-checked against the WECC specification yet, so they are not changed.
+
+andes_example:
+  source: "ANDES 2.0.0 example case ieee14/ieee14_solar.xlsx (no changes)"
+  REGCA1: {}
+  REECA1: {}
+  REPCA1: {}
+
+wecc_mvwg_2019:
+  source: >-
+    WECC MVWG, Solar Photovoltaic Power Plant Modeling and Validation Guideline,
+    December 9, 2019, Section 3.2 example model invocation. WECC states these values
+    are for illustration only and do not represent any particular plant.
+  REGCA1:
+    Tg: 0.02          # converter time constant, s (example: 0.1)
+    Rrpwr: 1.4        # active-current recovery ramp after a fault, pu/s
+    Brkpt: 0.9
+    Zerox: 0.5
+    Lvplsw: 0         # low-voltage power logic disabled
+    Lvpl1: 1.0
+    Volim: 1.1        # vtmax
+    Lvpnt1: 0.05
+    Lvpnt0: 0.01
+    # Iolim (qmin, -1.0 in the guideline) is set by IBR-FaultScreen to -Imax
+    Accel: 0.7
+    Tfltr: 0.01
+    Iqrmax: 20
+    Iqrmin: -20
+  REECA1:
+    Vdip: 0.5
+    Vup: 1.1
+    Trv: 0.01
+    dbd1: -0.05
+    dbd2: 0.05
+    Kqv: 2.0          # example: 20
+    Iqh1: 1.0
+    Iql1: -1.0
+    Vref0: 0          # 0 = use the initial terminal voltage (ANDES convention)
+    Iqfrz: 0.0
+    Thld: 0.0         # example: -2 (holds the injection after the voltage recovers)
+    Thld2: 0.0
+    Tp: 0.01
+    # QMax/QMin (0.6) and VMAX/VMIN (1.2/0.8) from the guideline are not used:
+    # with the ANDES example's control flags they clamp a PI output at
+    # initialization (found in testing), so the example's wide limits are kept.
+    Kqp: 1.0
+    Kqi: 1.0
+    Kvp: 1.0
+    Kvi: 1.0
+    dPmax: 1.0
+    dPmin: -1.0
+    Tpord: 0.01
+  REPCA1:
+    Tfltr: 0.02
+    Kp: 18.0
+    Ki: 5.0
+    Tft: 0.0
+    Tfv: 0.05
+    Vfrz: 0.0
+    Kc: 0.02
+    emax: 0.5
+    emin: -0.5
+    dbd1: 0.0
+    dbd2: 0.0
+    Qmax: 0.575
+    Qmin: -0.575
+    Kpg: 0.1
+    Kig: 0.05
+    Tp: 0.25
+    fdbd1: -0.0006
+    fdbd2: 0.0006
+    femax: 99.0
+    femin: -99.0
+    Tg: 0.1           # tlag
+    Ddn: 20.0
+    Dup: 0.0
+    Fflag: 1

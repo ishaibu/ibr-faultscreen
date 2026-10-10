@@ -1,0 +1,68 @@
+# IBR-FaultScreen criteria: NERC PRC-029-1 ride-through envelopes.
+#
+# TRANSCRIBED BY CLAUDE on 2026-10-08 from the NERC PDF:
+#   https://www.nerc.com/globalassets/standards/reliability-standards/prc/prc-029-1.pdf
+#   Version history in that PDF: Draft 4 approved by the NERC Board, October 8, 2024
+#   (errata October 16, 2024).
+# CHECKED 2026-10-09 by S. Ibrahim against the PDF: every row of Table 2
+# ("Voltage Ride-through Requirements for All Other IBR") and Table 3, the
+# Attachment 1 notes 1-11 (voltage) and Attachment 2 notes 1-5 (frequency).
+# Open interpretation (note 7, "add the duration within each band"): the tool
+# counts each band separately (time at 0.6 pu counts toward the 0.50-0.70 band
+# only). Reading the rows as nested thresholds (time at 0.6 pu also counting
+# toward "< 0.90") would be more conservative. NERC's text does not settle it.
+# !!! A modified PRC-029 filing was anticipated in August 2026; confirm the
+# !!! version in force for your study.
+#
+# Interpretation choices (verify):
+#  - Table 2 (all other IBR, e.g. PV and BESS) is used. For type 3/4 wind, use Table 1.
+#  - Time is counted per band ("add the duration within each band", Attachment 1
+#    note 7), cumulative within any 10 s window (note 8). Frequency: cumulative
+#    within any 10-minute window (Attachment 2 note 5).
+#  - Voltage is the high side of the main power transformer (note 5); the tool
+#    measures at the high-side bus of each IBR's step-up transformer.
+#  - Rows marked "N/A" / "May trip" (may ride-through zone) are bands with 0 s:
+#    any time there is reported as loss-of-IBR exposure.
+#  - Positive-sequence RMS voltage is used. For the balanced faults of v0.1 it
+#    equals the per-phase max/min of note 5; unbalanced faults would differ.
+#  - Not modeled: the "more than four deviations in 10 s" rule (note 9), the
+#    frequency condition on Tables 1-2 (note 6), the phase-jump and V/Hz exemptions.
+#
+# The angle, voltage-recovery and frequency limits below are NOT from PRC-029.
+# They are ILLUSTRATIVE screening values for the hand review. Replace them
+# with your transmission provider's criteria.
+
+angle_limit_deg: 180          # screening heuristic, not a standard value
+v_recovery_min_pu: 0.8        # ILLUSTRATIVE
+v_recovery_time_s: 1.0        # ILLUSTRATIVE
+f_min_hz: 59.0                # ILLUSTRATIVE
+f_max_hz: 61.0                # ILLUSTRATIVE
+
+envelopes:
+  - name: PRC-029-1_Table2_voltage
+    quantity: voltage
+    source: "NERC PRC-029-1 Attachment 1 Table 2 (transcribed 2026-10-08; rows checked 2026-10-09)"
+    method: cumulative
+    window_s: 10
+    bands:
+      - {low: 1.20, high: 9.99, min_s: 0,          closed: neither}  # > 1.20    N/A (may ride-through)
+      - {low: 1.10, high: 1.20, min_s: 1.0,        closed: right}    # > 1.10    mandatory, 1.0 s
+      - {low: 1.05, high: 1.10, min_s: 1800,       closed: right}    # > 1.05    continuous op., 1800 s
+      - {low: 0.90, high: 1.05, min_s: continuous, closed: both}     # 0.90-1.05 continuous
+      - {low: 0.70, high: 0.90, min_s: 6.00,       closed: left}     # < 0.90    mandatory, 6.00 s
+      - {low: 0.50, high: 0.70, min_s: 3.00,       closed: left}     # < 0.70    mandatory, 3.00 s
+      - {low: 0.25, high: 0.50, min_s: 1.20,       closed: left}     # < 0.50    mandatory, 1.20 s
+      - {low: 0.10, high: 0.25, min_s: 0.32,       closed: left}     # < 0.25    mandatory, 0.32 s
+      - {low: 0.00, high: 0.10, min_s: 0.32,       closed: left}     # < 0.10    permissive, 0.32 s
+
+  - name: PRC-029-1_Table3_frequency
+    quantity: frequency
+    source: "NERC PRC-029-1 Attachment 2 Table 3 (transcribed 2026-10-08; rows checked 2026-10-09)"
+    method: cumulative
+    window_s: 600
+    bands:
+      - {low: 61.8, high: 99.0, min_s: 0,          closed: neither}  # > 61.8    may trip
+      - {low: 61.2, high: 61.8, min_s: 299,        closed: right}    # > 61.2    299 s
+      - {low: 58.8, high: 61.2, min_s: continuous, closed: both}     # 58.8-61.2 continuous
+      - {low: 57.0, high: 58.8, min_s: 299,        closed: left}     # < 58.8    299 s
+      - {low: 0.0,  high: 57.0, min_s: 0,          closed: left}     # < 57.0    may trip

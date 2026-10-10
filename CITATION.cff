@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use IBR-FaultScreen, please cite it as below."
+title: "IBR-FaultScreen: fault-scenario screening for grids with inverter-based resources"
+type: software
+authors:
+  - family-names: Ibrahim
+    given-names: Shaibu
+    orcid: "https://orcid.org/0009-0009-5942-9702"
+version: 0.1.0
+date-released: "2026-10-09"
+license: GPL-3.0-or-later
+repository-code: "https://github.com/ishaibu/ibr-faultscreen"
+keywords:
+  - power systems
+  - inverter-based resources
+  - transient stability
+  - fault screening
+  - ride-through
+  - PRC-029
+  - interconnection studies
+abstract: >-
+  IBR-FaultScreen simulates three-phase fault scenarios on power systems with
+  inverter-based resources (solar, wind, battery storage) using ANDES, labels each
+  scenario by failure mode (rotor-angle instability, slow voltage recovery, NERC
+  PRC-029-1 ride-through exposure, frequency), and trains a screening classifier
+  that ranks new scenarios for detailed study, verifying every risky result by
+  simulation. It is a screening aid and does not replace an interconnection study.

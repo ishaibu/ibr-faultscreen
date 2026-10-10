@@ -1,0 +1,28 @@
+# IBR-FaultScreen criteria settings: EXAMPLE FILE.
+#
+# !!! Every number below is ILLUSTRATIVE ONLY. None is taken from NERC PRC-029,
+# !!! IEEE 2800, or any transmission provider's criteria. Before real use,
+# !!! replace them with values from the current standard texts and your
+# !!! transmission provider, and update each `source:` line.
+
+angle_limit_deg: 180          # screening heuristic, not a standard value
+
+v_recovery_min_pu: 0.8        # illustrative
+v_recovery_time_s: 1.0        # illustrative
+
+f_min_hz: 59.0                # illustrative
+f_max_hz: 61.0                # illustrative
+rocof_limit_hz_s: 2.0         # illustrative
+rocof_window_s: 0.5           # illustrative
+
+envelopes:
+  - name: example_voltage
+    quantity: voltage         # pu at the IBR terminal
+    source: "ILLUSTRATIVE ONLY - replace with standard, version and table"
+    method: continuous        # or cumulative; take this from the standard text
+    bands:                    # [low, high) pu, minimum ride-through time
+      - {low: 0.0, high: 0.5, min_s: 0.15}
+      - {low: 0.5, high: 0.9, min_s: 2.0}
+      - {low: 0.9, high: 1.1, min_s: continuous}
+      - {low: 1.1, high: 1.2, min_s: 1.0}
+      - {low: 1.2, high: 9.9, min_s: 0}

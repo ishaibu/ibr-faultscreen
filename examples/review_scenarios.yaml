@@ -1,0 +1,49 @@
+# 21 scenarios for the hand review (20 + one bolted/near-bolted pair). Chosen to cover: no IBR vs. IBRs,
+# faults at an IBR's high-side bus and far away, short to long clearing times,
+# light to heavy load, and one to three IBRs. Clearing times are in seconds
+# (3 cycles = 0.05 s, 6 cycles = 0.1 s at 60 Hz).
+#
+# IBR generator -> terminal bus -> high-side bus (IEEE 39-bus):
+#   gen 2 -> 31 -> 6     gen 6 -> 35 -> 22     gen 9 -> 38 -> 29    gen 4 -> 33 -> 19
+
+# --- Baseline: no IBRs
+- {scenario_id: R01_base_b16_6c,  fault: {bus: 16, clear_time: 0.10}}
+- {scenario_id: R02_base_b16_12c, fault: {bus: 16, clear_time: 0.20}}
+- {scenario_id: R03_base_b6_6c,   fault: {bus: 6,  clear_time: 0.10}}
+
+# --- One IBR (gen 2), fault at its high-side bus 6
+- {scenario_id: R04_g2_b6_3c,  ibrs: [{gen: 2}], fault: {bus: 6, clear_time: 0.05}}
+- {scenario_id: R05_g2_b6_6c,  ibrs: [{gen: 2}], fault: {bus: 6, clear_time: 0.10}}
+- {scenario_id: R06_g2_b6_9c,  ibrs: [{gen: 2}], fault: {bus: 6, clear_time: 0.15}}
+- {scenario_id: R07_g2_b6_15c, ibrs: [{gen: 2}], fault: {bus: 6, clear_time: 0.25}}
+
+# --- One IBR (gen 2), remote faults
+- {scenario_id: R08_g2_b16_6c,  ibrs: [{gen: 2}], fault: {bus: 16, clear_time: 0.10}}
+- {scenario_id: R09_g2_b16_10c, ibrs: [{gen: 2}], fault: {bus: 16, clear_time: 0.1667}}
+- {scenario_id: R10_g2_b26_6c,  ibrs: [{gen: 2}], fault: {bus: 26, clear_time: 0.10}}
+
+# --- Battery (same models, discharging) at gen 6, fault near and far
+- {scenario_id: R11_bess6_b22_6c, ibrs: [{gen: 6, kind: bess}], fault: {bus: 22, clear_time: 0.10}}
+
+# --- Load level
+- {scenario_id: R13_g2_b16_6c_light, load_scale: 0.9, ibrs: [{gen: 2}], fault: {bus: 16, clear_time: 0.10}}
+- {scenario_id: R14_g2_b16_6c_heavy, load_scale: 1.1, ibrs: [{gen: 2}], fault: {bus: 16, clear_time: 0.10}}
+
+# --- Three IBRs (gens 2, 6, 9)
+- {scenario_id: R15_g269_b16_5c, ibrs: [{gen: 2}, {gen: 6}, {gen: 9}], fault: {bus: 16, clear_time: 0.0833}}
+- {scenario_id: R16_g269_b16_8c, ibrs: [{gen: 2}, {gen: 6}, {gen: 9}], fault: {bus: 16, clear_time: 0.1333}}
+- {scenario_id: R17_g269_b29_6c, ibrs: [{gen: 2}, {gen: 6}, {gen: 9}], fault: {bus: 29, clear_time: 0.10}}
+
+# --- Faults through an impedance (not bolted). 0.003 pu leaves roughly 0.1-0.2 pu
+#     at the faulted bus in this case.
+- {scenario_id: R18_g2_b6_9c_z003, ibrs: [{gen: 2}], fault: {bus: 6, clear_time: 0.15, x_pu: 0.003}}
+
+# --- No fault (flat run with IBRs): should be OK on every check
+- {scenario_id: R19_g269_flat, ibrs: [{gen: 2}, {gen: 6}, {gen: 9}]}
+
+# --- Gen 4 IBR, fault at its high-side bus 19, long clearing
+- {scenario_id: R20_g4_b19_12c, ibrs: [{gen: 4}], fault: {bus: 19, clear_time: 0.20}}
+
+# Same faults as R17 and R20, but near-bolted (0.003 pu): compare with the bolted runs
+- {scenario_id: R17z_g269_b29_6c_z003, ibrs: [{gen: 2}, {gen: 6}, {gen: 9}], fault: {bus: 29, clear_time: 0.10, x_pu: 0.003}}
+- {scenario_id: R20z_g4_b19_12c_z003, ibrs: [{gen: 4}], fault: {bus: 19, clear_time: 0.20, x_pu: 0.003}}
