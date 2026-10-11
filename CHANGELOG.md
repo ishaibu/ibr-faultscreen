@@ -26,6 +26,9 @@ First public release.
   network map with a Play button, ranked table that becomes cards on narrow screens,
   and interactive trajectories drawn in the browser (hover read-out, PNG download).
 - Review figures (PNG) for every simulated scenario.
+- Interactive demo report on GitHub Pages (IEEE 39-bus, 5,000 scenarios), built by
+  `tools/build_demo.py`; animated previews in the README.
+- Contributing guide and issue templates.
 - Command line: `ibr-faultscreen example | check | simulate | cct | dataset | train | screen | report`.
 - Validation tests (design spec §14), run on Python 3.11 and 3.13 for every push.
 

@@ -43,8 +43,13 @@ for f in ("LICENSE", "README.md", ".github/workflows/release.yml",
 tracked = [t for t in git("ls-files").splitlines() if t]
 if not tracked:
     problems.append("git ls-files returned nothing (is this the project folder?)")
+# the published demo page and README images may be larger (web assets)
+def size_limit(path):
+    return 6_000_000 if path.startswith(("docs/demo/", "docs/images/")) else 1_000_000
+
+
 big = [(t, (ROOT / t).stat().st_size) for t in tracked
-       if (ROOT / t).exists() and (ROOT / t).stat().st_size > 1_000_000]
+       if (ROOT / t).exists() and (ROOT / t).stat().st_size > size_limit(t)]
 for t, size in big:
     problems.append(f"large tracked file ({size / 1e6:.1f} MB): {t}")
 

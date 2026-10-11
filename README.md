@@ -1,5 +1,11 @@
 # IBR-FaultScreen
 
+[![tests](https://github.com/ishaibu/ibr-faultscreen/actions/workflows/tests.yml/badge.svg)](https://github.com/ishaibu/ibr-faultscreen/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/ibr-faultscreen)](https://pypi.org/project/ibr-faultscreen/)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-green)
+[![Interactive demo](https://img.shields.io/badge/demo-open%20in%20browser-0a9396)](https://ishaibu.github.io/ibr-faultscreen/demo/)
+
 **Fault-scenario screening for grids with inverter-based resources (solar, wind, battery storage).**
 
 IBR-FaultScreen simulates many three-phase fault scenarios, labels each one RISKY or OK by
@@ -8,11 +14,58 @@ NERC PRC-029-1, frequency), and trains a classifier that ranks new scenarios so 
 which contingencies to study in detail first. Every RISKY result shown to a user is verified
 by simulation.
 
+<p align="center">
+  <a href="https://ishaibu.github.io/ibr-faultscreen/demo/"><img src="https://raw.githubusercontent.com/ishaibu/ibr-faultscreen/main/docs/images/network-map.gif" width="760"
+  alt="Network map of the IEEE 39-bus system: buses shade from light to dark orange as more synchronous machines are replaced by IBRs and more fault scenarios become RISKY"></a>
+</p>
+<p align="center"><em>5,000 simulated faults on the IEEE 39-bus system: press Play and the share of
+RISKY faults grows from 16% with no IBRs to 52% with four. <a href="https://ishaibu.github.io/ibr-faultscreen/demo/">Open the interactive demo</a>.</em></p>
+
 > **Screening only.** It prioritizes detailed studies; it does not replace an
 > interconnection study. RMS positive-sequence simulation (ANDES), generic WECC IBR models,
 > balanced faults.
 
 Version 0.1.0. Author: Shaibu Ibrahim, P.E. License: GPL-3.0-or-later.
+
+## Try it
+
+- **[Interactive demo report](https://ishaibu.github.io/ibr-faultscreen/demo/)**, in your browser, nothing to install: the IEEE 39-bus
+  dataset (5,000 scenarios) with the animated network map, the ranked table, the model card,
+  and trajectories you can replay and read point by point.
+- **On your computer:** `pip install ibr-faultscreen`, then `ibr-faultscreen example`. It runs
+  five scenarios in about a minute and opens the same kind of report.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ishaibu/ibr-faultscreen/main/docs/images/trajectories.gif" width="760"
+  alt="Trajectory panel: voltage and rotor-angle spread draw themselves for three scenarios: post-fault overvoltage, rotor-angle instability, and a bolted fault the solver could not settle">
+</p>
+<p align="center"><em>Each scenario plays out when selected: here post-fault overvoltage at IBR buses,
+rotor-angle instability, and a bolted fault the solver could not settle (shown honestly).</em></p>
+
+## What it found on the IEEE 39-bus test system
+
+From the 5,000-scenario demo dataset (generic IBR parameters, illustrative limits; the data
+card and model card are in the [demo](https://ishaibu.github.io/ibr-faultscreen/demo/)):
+
+- **Risk grows with IBR share.** 16% of faults were RISKY with no IBRs, 31% with one, 52% with
+  four.
+- **Ride-through exposure came from overvoltage, not undervoltage.** Of 693 scenarios with
+  PRC-029-1 exposure, almost all had the IBR high-side voltage above 1.1 pu after the fault
+  cleared (sustained above 1.1 pu, or briefly above 1.2 pu); only 6 involved undervoltage.
+  This depends strongly on the generic IBR parameters.
+- **The learned model ranks better than a simple rule** (clearing time and lowest SCR), tested
+  only on fault buses it never saw: AUC 0.87 vs. 0.78, average precision 0.69 vs. 0.53.
+
+| Share of RISKY scenarios caught (recall) | Gradient boosting sends to simulation | Simple rule sends to simulation |
+|---|---|---|
+| 90% | 53% | 57% |
+| 95% | 62% | 63% |
+| 99% | 76% | 83% |
+
+The gain over the rule is largest when almost nothing may be missed. `screen` also always
+simulates fault buses where the solver often fails; with that, it caught 96% of RISKY and 95% of
+unsolvable scenarios while simulating 69% of all scenarios. These numbers are for one test system with
+generic models: retrain on your own network before relying on them.
 
 ## How it works
 
@@ -79,6 +132,21 @@ Add `--help` to any command for its options. A scenario file looks like this:
   fault: {bus: 16, clear_time: 0.10}     # seconds; bolted by default
 ```
 
+From Python:
+
+```python
+from ibr_faultscreen.criteria import default_criteria
+from ibr_faultscreen.label import label
+from ibr_faultscreen.scenario import FaultSpec, IBRSpec, Scenario
+from ibr_faultscreen.simulate import simulate
+
+scenario = Scenario("my_case", ibrs=(IBRSpec(2), IBRSpec(6, kind="bess")),
+                    fault=FaultSpec(16, clear_time=0.10))
+result = simulate(scenario)                  # ANDES time-domain run
+verdict = label(result, default_criteria())  # PRC-029-1 ride-through and other checks
+print(result.status, "RISKY" if verdict.risky else "OK", verdict.reasons)
+```
+
 Your own model: `ibr-faultscreen check mycase.raw` (the `.dyr` file with the same name is
 picked up automatically, or pass `--dyr`), then use `case: mycase.raw` in the scenario file.
 
@@ -126,6 +194,14 @@ explained in `docs/glossary.md`.
 - `docs/glossary.md`: abbreviations and terms
 - `CHANGELOG.md`: what changed in each version
 - `examples/walkthrough.ipynb`: step-by-step notebook
+- `tools/build_demo.py`: rebuilds the interactive demo from a dataset
+
+## Contributing
+
+Questions, bug reports and ideas are welcome: open an
+[issue](https://github.com/ishaibu/ibr-faultscreen/issues) (templates help you include what is
+needed). Please never attach confidential network models; an anonymized description or the
+IEEE 39-bus case is enough. See `CONTRIBUTING.md`.
 
 ## Citation
 

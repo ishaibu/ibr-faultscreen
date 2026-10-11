@@ -1,0 +1,27 @@
+name: Bug report
+description: Something does not work or gives a wrong result
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please do not attach confidential network models. The IEEE 39-bus case or an anonymized description is enough.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command and full error text
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `ibr-faultscreen --version` and `python --version`, and your operating system
+    validations:
+      required: true

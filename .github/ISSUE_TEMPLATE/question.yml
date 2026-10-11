@@ -1,0 +1,15 @@
+name: Question or idea
+description: Ask how to do something, or suggest an improvement
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question or idea
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you studying (for example interconnection screening, research, teaching)? Optional.
