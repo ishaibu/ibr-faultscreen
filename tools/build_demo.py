@@ -20,6 +20,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+DOI_LINKS = ('<br>Dataset: <a href="https://doi.org/10.5281/zenodo.23290449">doi.org/10.5281/zenodo.23290449</a> · Software: <a href="https://doi.org/10.5281/zenodo.23290219">doi.org/10.5281/zenodo.23290219</a>')
+
 # One representative scenario per outcome: (label shown in the log, row filter)
 PICKS = [
     ("OK with several IBRs", lambda r: r["label"] == "OK" and r["n_ibr"] in ("3", "4")),
@@ -97,6 +99,7 @@ def main(argv=None):
                                "limits. Not a real system."))
     html = out.read_text(encoding="utf-8")
     html = re.sub(r"(<div class=\"ver\">IBR-FaultScreen v[^<]*<br>)[^<]*", r"\1demo", html)
+    html = html.replace("Not a real system.</p>", "Not a real system." + DOI_LINKS + "</p>", 1)
     out.write_text(html, encoding="utf-8")
     print(f"Demo: {out} ({out.stat().st_size / 1e6:.1f} MB)")
 

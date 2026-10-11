@@ -47,7 +47,8 @@ First public release.
   in the training data; the model card reports this, the study effort at
   recall 0.90/0.95/0.99, and how many unknown-outcome scenarios the model alone
   would have passed.
-- Gradient-boosting settings re-chosen on the full dataset (AUC 0.85 to 0.88).
+- Gradient-boosting settings re-chosen on the full dataset (AUC 0.87 on fault
+  buses never seen in training, for the published 5,000-scenario dataset).
 - The data card shows ride-through exposure by envelope band and unknown
   outcomes by fault bus.
 

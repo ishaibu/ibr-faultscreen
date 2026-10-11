@@ -5,6 +5,8 @@
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-green)
 [![Interactive demo](https://img.shields.io/badge/demo-open%20in%20browser-0a9396)](https://ishaibu.github.io/ibr-faultscreen/demo/)
+[![Software DOI](https://img.shields.io/badge/software%20DOI-10.5281%2Fzenodo.23290219-blue)](https://doi.org/10.5281/zenodo.23290219)
+[![Dataset DOI](https://img.shields.io/badge/dataset%20DOI-10.5281%2Fzenodo.23290449-blue)](https://doi.org/10.5281/zenodo.23290449)
 
 **Fault-scenario screening for grids with inverter-based resources (solar, wind, battery storage).**
 
@@ -45,7 +47,8 @@ rotor-angle instability, and a bolted fault the solver could not settle (shown h
 ## What it found on the IEEE 39-bus test system
 
 From the 5,000-scenario demo dataset (generic IBR parameters, illustrative limits; the data
-card and model card are in the [demo](https://ishaibu.github.io/ibr-faultscreen/demo/)):
+card and model card are in the [demo](https://ishaibu.github.io/ibr-faultscreen/demo/)). The
+dataset is archived on Zenodo: [doi.org/10.5281/zenodo.23290449](https://doi.org/10.5281/zenodo.23290449).
 
 - **Risk grows with IBR share.** 16% of faults were RISKY with no IBRs, 31% with one, 52% with
   four.
@@ -203,6 +206,18 @@ Questions, bug reports and ideas are welcome: open an
 needed). Please never attach confidential network models; an anonymized description or the
 IEEE 39-bus case is enough. See `CONTRIBUTING.md`.
 
-## Citation
+## How to cite
 
-See `CITATION.cff`. A DOI is added after the first release is archived on Zenodo.
+If you use IBR-FaultScreen, please cite the software, and the dataset if you use it:
+
+> Ibrahim, S. (2026). *IBR-FaultScreen: fault-scenario screening for grids with
+> inverter-based resources* (Version 0.1.0) [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.23290219
+
+> Ibrahim, S. (2026). *IBR-FaultScreen fault-screening dataset: 5,000 simulated fault
+> scenarios on the IEEE 39-bus system with inverter-based resources* (Version 1.0)
+> [Data set]. Zenodo. https://doi.org/10.5281/zenodo.23290449
+
+These DOIs always point to the latest version; each version also has its own DOI on its
+Zenodo page. GitHub's "Cite this repository" button (from `CITATION.cff`) gives APA and
+BibTeX.

@@ -11,5 +11,7 @@ Fault-scenario screening for grids with inverter-based resources (solar, wind, b
   **[glossary](glossary)**
 - **[Source code, installation and documentation](https://github.com/ishaibu/ibr-faultscreen)**:
   `pip install ibr-faultscreen`
+- **Cite:** software [doi.org/10.5281/zenodo.23290219](https://doi.org/10.5281/zenodo.23290219) ·
+  dataset [doi.org/10.5281/zenodo.23290449](https://doi.org/10.5281/zenodo.23290449)
 
 Screening only: results do not replace interconnection studies.

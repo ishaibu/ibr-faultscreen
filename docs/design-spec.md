@@ -246,8 +246,8 @@ Otherwise OK. Each individual failure mode is kept as its own label.
   evaluation by default, because their RISKY label reflects the solver, not the
   grid. The data card lists them by fault bus.
 - **Files:** `dataset.csv` (CSV only; Parquet dropped to avoid another
-  dependency) and an automatic `data-card.md`. To be published on Zenodo with its
-  own DOI, linked to the software DOI and ORCID.
+  dependency) and an automatic `data-card.md`. Published on Zenodo with its own
+  DOI (10.5281/zenodo.23290449), linked to the software DOI (10.5281/zenodo.23290219) and ORCID.
 - **Withdrawn results:** the first demo run (240 scenarios) is withdrawn. Two
   bugs found before v0.1.0 made it unreliable: (1) with the ANDES example's
   Iolim = 0, generator 8 could not absorb reactive power and its dynamic
