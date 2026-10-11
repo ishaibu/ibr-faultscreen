@@ -1,7 +1,7 @@
 # IBR-FaultScreen
 
 [![tests](https://github.com/ishaibu/ibr-faultscreen/actions/workflows/tests.yml/badge.svg)](https://github.com/ishaibu/ibr-faultscreen/actions/workflows/tests.yml)
-[![PyPI](https://img.shields.io/pypi/v/ibr-faultscreen)](https://pypi.org/project/ibr-faultscreen/)
+[![PyPI](https://img.shields.io/pypi/v/ibr-faultscreen?cacheSeconds=3600)](https://pypi.org/project/ibr-faultscreen/)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-green)
 [![Interactive demo](https://img.shields.io/badge/demo-open%20in%20browser-0a9396)](https://ishaibu.github.io/ibr-faultscreen/demo/)
