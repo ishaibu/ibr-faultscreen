@@ -1,6 +1,6 @@
-# IBR-FaultScreen design spec (v0.1)
+# IBR-FaultScreen design spec (v0.2)
 
-*Updated 2026-10-10. Author: Shaibu Ibrahim, P.E. License: GPL-3.0-or-later.
+*Updated 2026-10-23. Author: Shaibu Ibrahim, P.E. License: GPL-3.0-or-later.
 Abbreviations are explained in `docs/glossary.md`.*
 
 Labels used in this document:
@@ -39,9 +39,16 @@ them.
 - Labeled dataset with a data card; classifier with honest held-out evaluation.
 - Outputs: tables, plots, an animated network map, a CCT table, and a one-page summary.
 
-**Later (not in v0.1)**
-- Single-line-to-ground (SLG) equivalent faults (v0.2).
-- Grid-forming vs. grid-following comparison (v0.2).
+**Added in v0.2**
+- Equal-area view of each scenario (single-machine equivalent) and around the CCT.
+- Fixed IEEE 39-bus map layout; run any scenario list in parallel (`dataset --scenarios`).
+- Demo page: "Build your own grid" explorer (every combination simulated in
+  advance), shareable links, quiz mode.
+
+**Later (not in v0.2)**
+- Single-line-to-ground (SLG) equivalent faults.
+- Grid-forming vs. grid-following comparison (first confirm which grid-forming
+  models ANDES provides).
 - IEEE 118-bus scalability demo (needs documented assumed dynamic data).
 - PSLF and other formats; line faults with breaker trips; N-1-1.
 
@@ -59,7 +66,7 @@ them.
 | License | GPL-3.0-or-later |
 | Meaning of "fault classification" | Scenario risk classification by failure mode |
 | Criteria | All four in §8; every threshold user-editable; defaults entered by the author from the standard texts |
-| IBR models | Grid-following solar + BESS (discharging or idle only, see §5) in v0.1; grid-forming in v0.2 |
+| IBR models | Grid-following solar + BESS (discharging or idle only, see §5); grid-forming later |
 | Fault types | Three-phase (bolted + impedance) only in v0.1 |
 | Users' own models | PSS/E `.raw/.dyr` import in v0.1 |
 | Machine-learning approach | Gradient boosting (scikit-learn) plus rule and logistic baselines |
@@ -174,6 +181,18 @@ interconnection-study practice. **[To verify]** with users.
    with finer steps (1/120 s, then 1/480 s); if every step fails, the run is
    `sim_fail`. Failed runs are kept in the dataset and shown in the report. The
    parallel dataset runner adds a wall-clock timeout per scenario.
+7. A bus held at ~0 V after clearing counts as non-physical either when it lasts
+   0.1 s (after a 0.05 s settling delay), or when it lasts until the run stopped
+   early on the angle limit. **[Fact]** The second case was added in v0.2.0:
+   re-simulating the 391 angle-unstable scenarios of the 5,000-scenario dataset
+   (published with v0.1.0) showed 107 in which a bus (the faulted bus or
+   another) snapped to exactly 0 V at the clearing instant and stayed there
+   while the rotor angles moved another 60–70°. Clearing a fault cannot do
+   that, so these are numerical. ANDES had reported them as angle instability
+   because the run stopped before the 0.1 s rule could apply; finer steps
+   (1/120, 1/480 s) did not change them. In v0.2.0 they go through the
+   milder-fault check like any unsolvable bolted fault: 82 became RISKY
+   (confirmed) and 25 RISKY (unresolved), which are left out of training.
 
 ## 8. Screening criteria
 
@@ -221,6 +240,38 @@ Otherwise OK. Each individual failure mode is kept as its own label.
 - Search bracket: user-set minimum and maximum clearing times. If the minimum is
   already unstable, report "CCT below minimum." If the maximum is stable, report
   "CCT above maximum."
+- `cct` also shows the equal-area view just below and just above the CCT (two
+  extra simulations; `--no-equal-area` skips them).
+
+### Equal-area view (v0.2.0)
+
+The classical equal-area criterion is exact only for one machine against an
+infinite bus. For a multi-machine system the tool builds a single-machine
+equivalent from the simulated trajectories, as in the SIME and extended
+equal-area methods in the literature **[To verify: cite the exact references
+before using them in a paper]**:
+
+- Split the synchronous machines into a leading group C and the rest N at the
+  largest gap between rotor angles, at the moment of largest spread after the
+  fault starts (if no gap exceeds 10°, the machine that swings furthest leads).
+- δ = δ_C − δ_N (inertia-weighted group angles); M = M_C·M_N / (M_C + M_N);
+  P_m = M·(ΣP_m,C/M_C − ΣP_m,N/M_N), and the same for P_e. Torques stand in for
+  powers (speed near 1 pu), system base.
+- First swing: from the fault until the equivalent angle stops increasing
+  (stable) or the run ends (unstable). Accelerating area = ∫(P_m − P_e)dδ while
+  the fault is on; decelerating area = −∫(P_m − P_e)dδ after clearing.
+- In a stable first swing the two areas are equal by energy conservation, so the
+  view explains stability; it is not a separate test of it. No stability margin
+  is extrapolated: the view shows only what was simulated.
+- "More than two groups" is noted for unstable cases when a second angle gap is
+  at least half the largest and at least 30°.
+- **[Fact]** Checked against the textbook single-machine case (ANDES SMIB,
+  classical model, no damping): accelerating area within 1% and maximum angle
+  within 1° of the hand calculation at 0.10, 0.15 and 0.17 s; unstable at 0.191 s
+  (`tests/test_equal_area.py`). On the 39-bus case the areas balance within 3%
+  in a stable case.
+- It covers rotor-angle stability only. Voltage recovery, ride-through and
+  frequency are separate checks.
 
 ## 10. Dataset
 
@@ -296,7 +347,16 @@ Otherwise OK. Each individual failure mode is kept as its own label.
 | CCT table (lower bound / milder-fault estimate where bolted runs fail) | Engineers |
 | Risk versus IBR share chart | Engineers, managers |
 | Interactive trajectories in the report, and PNG figures with criteria overlaid | Engineers, study reports |
+| Equal-area view (animated in the report, fifth panel of each PNG, and in `cct`) | Engineers, students |
 | Model card and data card | Reviewers |
+
+**Network map layout.** The built-in IEEE 39-bus case uses a fixed drawing that
+follows the usual one-line arrangement of that system
+(`src/ibr_faultscreen/data/layout_ieee39.yaml`, shared with SCR-Screen so both
+tools draw it the same way); transformers are dashed. Other cases use their own
+bus coordinates when every bus has them, otherwise an automatic force-directed
+layout. The map says which, and that positions are not geographic. On phones the
+drawing is turned a quarter turn (not mirrored).
 
 The report is one self-contained HTML file in the SCR-Screen style (white
 background, black headings, teal rule; DM Sans), responsive on phones, tablets
@@ -311,8 +371,9 @@ parsed; v35 untested). `check` lists `.dyr` models ANDES cannot read.
 ibr-faultscreen example
 ibr-faultscreen check CASE [--dyr FILE]
 ibr-faultscreen simulate SCENARIOS.yaml [--criteria FILE] [--open]
-ibr-faultscreen cct --bus 16 [--ibr 2 6] [--x 0.001]
+ibr-faultscreen cct --bus 16 [--ibr 2 6] [--x 0.001] [--out cct.csv] [--no-equal-area]
 ibr-faultscreen dataset --n 5000 [--workers 7] [--seed 2026]
+ibr-faultscreen dataset --scenarios LIST.csv [--workers 7]
 ibr-faultscreen train dataset.csv [--recall 0.95]
 ibr-faultscreen screen --model model.joblib [--n 200 | --scenarios FILE] [--open]
 ibr-faultscreen report results.csv [--open]
@@ -323,6 +384,8 @@ ibr-faultscreen report results.csv [--open]
 | Test | What it checks | Pass criterion |
 |---|---|---|
 | Single-machine clearing time | SMIB critical clearing time, classical model, three-phase fault at the machine terminal, no topology change. Hand value from the equal-area criterion: cos δ_cr = (π − 2δ₀) sin δ₀ − cos δ₀, and t_cr = √(4H(δ_cr − δ₀) / (ω_s P_m)) | Simulated CCT within ±1 cycle of the hand value **[Assumption]** |
+| Equal-area view | Single-machine equivalent on the SMIB case; energy balance on the 39-bus case | Accelerating area within 1% and maximum angle within 1° of the textbook values; stable/unstable on the right side of the CCT; areas balance within 3% in a stable 39-bus case |
+| Map layout | Fixed IEEE 39-bus drawing against the case's branch list | Every bus placed, every branch drawn once, 12 transformers dashed, no crossing lines, no bus on a line it does not belong to |
 | Flat run | No disturbance, 39-bus with and without IBRs, 20 s | Voltages and speeds within ±0.001 pu of initial values |
 | 39-bus clearing time | Bolted fault at bus 16, no IBRs | Bolted CCT is a lower bound: stable at 0.185 s, longer clearing times not solvable in ANDES 2.0.0. Milder fault (0.001 pu) CCT 0.256 s, bracketed within half a cycle. Regression values (model-specific, not a published benchmark). **Correction:** the earlier value 0.189 s, and the claim that an IBR on generator 2 lowers it to 0.159 s, came from non-physical runs and are withdrawn |
 | IBR current limit | IBR current during a nearby bolted fault | Never exceeds its configured limit (plus numeric tolerance) |
@@ -338,7 +401,7 @@ ibr-faultscreen report results.csv [--open]
 
 - RMS positive-sequence models miss fast inverter control and EMT phenomena.
 - Generic WECC models may not match a specific inverter's behavior.
-- Balanced faults only in v0.1.
+- Balanced faults only (this version).
 - Results depend on user-entered criteria and envelope values.
 - Screening only: it prioritizes detailed studies and does not replace them.
 
@@ -354,7 +417,7 @@ ibr-faultscreen report results.csv [--open]
    current during faults was lower (about 0.5 of the limit vs. 0.7). Both
    profiles are illustrative. The example parameters keep reactive current high
    after clearing, giving post-fault overvoltage of 1.1–1.2 pu at IBR buses
-   (review cases R13, R15). Charging BESS in v0.2.
+   (review cases R13, R15). Charging BESS in a later version.
 2. Solver robustness (milder-fault check implemented). Report the reproducible
    cases to the ANDES developers. With bolted faults (1e-4 pu), ANDES 2.0.0
    failed for faults at the high-side bus of IBRs on generators 4, 5 and 9, and

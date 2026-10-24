@@ -196,7 +196,7 @@ def _fields():
 def run_dataset(scenarios: list[Scenario], settings: CriteriaSettings, out_dir,
                 workers: int | None = None, timeout_s: float = 300.0,
                 plan: SamplingPlan | None = None, criteria_source: str = "",
-                progress=print) -> RunSummary:
+                progress=print, scenario_source: str = "") -> RunSummary:
     """Run all `scenarios` (resumable). See the module docstring."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -269,7 +269,8 @@ def run_dataset(scenarios: list[Scenario], settings: CriteriaSettings, out_dir,
         from .datacard import write_data_card
         summary.data_card = write_data_card(summary.dataset_csv, out / "data-card.md",
                                             plan=plan, settings=settings,
-                                            criteria_source=criteria_source)
+                                            criteria_source=criteria_source,
+                                            scenario_source=scenario_source)
     summary.counts = _count(rows)
     return summary
 

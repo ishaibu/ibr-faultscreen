@@ -23,6 +23,12 @@ Abbreviations and terms used in IBR-FaultScreen, its reports and its documents.
 | Milder-fault check | — | When a bolted fault cannot be solved, the tool reruns it at 0.001 then 0.003 pu: "confirmed" if the milder fault is already RISKY, "unresolved" if it is OK |
 | Solver-hard fault bus | — | A fault location where the solver often fails; `screen` always simulates scenarios there |
 | Ride-through | — | An IBR staying connected and controlled through a voltage or frequency disturbance |
+| Equal-area criterion | — | Classical rotor-angle stability test: a machine stays in step if the energy it gains while the fault is on (accelerating area) can be given back after clearing (decelerating area) |
+| Single-machine equivalent | — | The machines split into a leading group and the rest, reduced to one equivalent machine so the equal-area picture applies to a multi-machine system (the SIME / extended equal-area idea) |
+| Accelerating / decelerating area | — | ∫(P_m − P_e)dδ while the fault is on / −∫(P_m − P_e)dδ after clearing, in pu·rad (pu power × radians) |
+| Leading group | — | The machines that swing ahead of the rest after the fault |
+| Electrical center | — | The point between two groups of machines where voltage dips lowest as they swing apart |
+| One-line diagram | — | A single-line drawing of a three-phase network; the map's IEEE 39-bus layout follows the usual one |
 
 ## Standards and organizations
 
@@ -80,3 +86,4 @@ Abbreviations and terms used in IBR-FaultScreen, its reports and its documents.
 | Permutation importance | — | How much the score drops when one feature's values are shuffled |
 | Model check | — | The release test: recall on target, and better ranking (AUC and AP) than the rule baseline on unseen fault locations |
 | Study effort | — | Share of scenarios the screen sends to simulation for a given recall |
+| Explorer | — | The "Build your own grid" section of the online demo: every combination of IBRs, fault bus and clearing time it offers was simulated in advance |

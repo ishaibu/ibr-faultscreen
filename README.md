@@ -120,8 +120,8 @@ longer while ANDES prepares its models) and opens an HTML report. Results go to
 |---|---|
 | `ibr-faultscreen check CASE` | Is a case ready? Lists unsupported PSS/E dynamic models, generators that can become IBRs, power flow status |
 | `ibr-faultscreen simulate SCENARIOS.yaml` | Runs your scenarios; writes results, figures and a report |
-| `ibr-faultscreen cct --bus 16` | Critical clearing time at one or more buses |
-| `ibr-faultscreen dataset --n 5000` | Generates a labeled dataset in parallel (resumable, with a data card) |
+| `ibr-faultscreen cct --bus 16` | Critical clearing time at one or more buses, with the equal-area view just below and above it |
+| `ibr-faultscreen dataset --n 5000` | Generates a labeled dataset in parallel (resumable, with a data card); `--scenarios LIST.csv` runs your own list instead |
 | `ibr-faultscreen train dataset.csv` | Evaluates rule, logistic and gradient-boosting models on unseen fault locations; trains one |
 | `ibr-faultscreen screen --model model.joblib` | Ranks new scenarios and verifies the risky ones by simulation |
 | `ibr-faultscreen report results.csv` | Builds the HTML report from any results file |

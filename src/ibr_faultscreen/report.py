@@ -51,11 +51,62 @@ def _e(x):
 
 # ------------------------------------------------------------------ layout
 
-def network_layout(sheets, seed=7, iters=400):
-    """Deterministic force-directed layout (Fruchterman-Reingold) in [0, 1]^2."""
-    buses = [int(b) for b in sheets["Bus"]["idx"]]
+#: Fixed drawing positions for built-in cases (file in the package data folder).
+FIXED_LAYOUTS = {"ieee39": "layout_ieee39.yaml"}
+
+LAYOUT_NOTES = {
+    "fixed": "Bus positions follow the usual one-line drawing of this test system; "
+             "they are not geographic.",
+    "coords": "Bus positions come from the case's own coordinates.",
+    "auto": "Bus positions are computed automatically from the network connections "
+            "(the case has no coordinates); they are not geographic.",
+}
+
+
+def _fixed_positions(case, buses):
+    """Positions from a built-in layout file, or None if there is none for this case
+    or it does not cover exactly the case's buses."""
+    name = FIXED_LAYOUTS.get(str(case).lower()) if case is not None else None
+    if name is None:
+        return None
+    import yaml
+    from importlib.resources import files
+    data = yaml.safe_load(files("ibr_faultscreen.data").joinpath(name).read_text(encoding="utf-8"))
+    pos = {int(b): (float(x), float(y)) for b, (x, y) in data["positions"].items()}
+    return pos if set(pos) == set(buses) else None
+
+
+def _case_coordinates(sheets, buses):
+    """Positions from the Bus table's xcoord/ycoord (y pointing up), or None."""
+    bus = sheets["Bus"]
+    if "xcoord" not in bus or "ycoord" not in bus:
+        return None
+    pos = {int(b): (float(x), -float(y)) for b, x, y in zip(bus["idx"], bus["xcoord"], bus["ycoord"])}
+    if len(set(pos.values())) < len(pos):          # missing (all zero) or duplicated coordinates
+        return None
+    return pos if set(pos) == set(buses) else None
+
+
+def _edges(sheets):
+    """(bus1, bus2, is_transformer) for every branch."""
+    line = sheets["Line"]
+    vn = {int(b): float(v) for b, v in zip(sheets["Bus"]["idx"], sheets["Bus"]["Vn"])} \
+        if "Vn" in sheets["Bus"] else {}
+    out = []
+    for _, r in line.iterrows():
+        a, b = int(r["bus1"]), int(r["bus2"])
+        if "trans" in line and str(r["trans"]) not in ("", "nan"):
+            xf = bool(int(float(r["trans"])))
+        else:
+            xf = vn.get(a) is not None and vn.get(a) != vn.get(b)
+        out.append((a, b, xf))
+    return out
+
+
+def _auto_positions(buses, edges, seed=7, iters=400):
+    """Deterministic force-directed layout (Fruchterman-Reingold)."""
     pos = {b: i for i, b in enumerate(buses)}
-    edges = [(pos[int(r["bus1"])], pos[int(r["bus2"])]) for _, r in sheets["Line"].iterrows()]
+    idx = [(pos[a], pos[b]) for a, b, _ in edges]
     n = len(buses)
     rng = np.random.default_rng(seed)
     P = rng.random((n, 2))
@@ -66,7 +117,7 @@ def network_layout(sheets, seed=7, iters=400):
         dist = np.linalg.norm(d, axis=2) + 1e-9
         rep = (k * k / dist ** 2)[:, :, None] * d
         disp = rep.sum(axis=1)
-        for a, b in edges:
+        for a, b in idx:
             v = P[a] - P[b]
             L = np.linalg.norm(v) + 1e-9
             f = (L / k) * v
@@ -75,10 +126,27 @@ def network_layout(sheets, seed=7, iters=400):
         L = np.linalg.norm(disp, axis=1)[:, None] + 1e-9
         P += disp / L * np.minimum(L, t)
         t *= 0.99
+    return {b: (float(P[i, 0]), float(P[i, 1])) for b, i in pos.items()}
+
+
+def network_layout(sheets, case=None):
+    """Map positions in [0, 1]^2 (y downward), branches and a note on where the
+    positions come from.
+
+    Returns (positions, edges, source): edges are (bus1, bus2, is_transformer);
+    source is "fixed" (built-in drawing for a known test case), "coords" (the
+    case's own bus coordinates) or "auto" (force-directed layout)."""
+    buses = [int(b) for b in sheets["Bus"]["idx"]]
+    edges = _edges(sheets)
+    pos, source = _fixed_positions(case, buses), "fixed"
+    if pos is None:
+        pos, source = _case_coordinates(sheets, buses), "coords"
+    if pos is None:
+        pos, source = _auto_positions(buses, edges), "auto"
+    P = np.array([pos[b] for b in buses], dtype=float)
     P -= P.min(axis=0)
     P /= P.max(axis=0) + 1e-9
-    return {b: (float(P[i, 0]), float(P[i, 1])) for b, i in pos.items()}, \
-        [(buses[a], buses[b]) for a, b in edges]
+    return {b: (float(P[i, 0]), float(P[i, 1])) for i, b in enumerate(buses)}, edges, source
 
 
 # ------------------------------------------------------------------ pieces
@@ -120,7 +188,8 @@ def map_data(rows, layout):
 
 
 def _map_svg(layout, edges, gen_buses, ibr_hv_buses, shares, *, tall=False):
-    """SVG network map. `tall` swaps the axes for portrait screens (phones)."""
+    """SVG network map. `tall` rotates the drawing a quarter turn clockwise for
+    portrait screens (phones), so it is turned, not mirrored."""
     W, H = (600, 860) if tall else (960, 600)
     pad = 34 if tall else 30
     k = 1.35 if tall else 1.0          # bigger buses on phones, where the map is scaled down
@@ -128,16 +197,17 @@ def _map_svg(layout, edges, gen_buses, ibr_hv_buses, shares, *, tall=False):
     def xy(b):
         x, y = layout[b]
         if tall:
-            x, y = y, x
+            x, y = 1.0 - y, x
         return pad + x * (W - 2 * pad), pad + y * (H - 2 * pad)
 
     cls = "map tall" if tall else "map wide"
     out = [f'<svg viewBox="0 0 {W} {H}" class="{cls}" role="img" '
            f'aria-label="Network map shaded by share of RISKY faults at each bus"><g class="edges">']
     step_e = min(18.0, 700.0 / max(len(edges), 1))
-    for i, (a, b) in enumerate(edges):
+    for i, (a, b, xf) in enumerate(edges):
         (x1, y1), (x2, y2) = xy(a), xy(b)
-        out.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" class="edge" '
+        ecls = "edge xf" if xf else "edge"
+        out.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" class="{ecls}" '
                    f'style="animation-delay:{i * step_e:.0f}ms"/>')
     out.append('</g><g class="buses">')
     step_b = min(25.0, 900.0 / max(len(layout), 1))
@@ -366,7 +436,7 @@ def build_report(rows, out_path, *, title="IBR-FaultScreen report", case="ieee39
         else ("green", "Low")
 
     sheets = read_case(case, dyr)
-    layout, edges = network_layout(sheets)
+    layout, edges, layout_source = network_layout(sheets, case)
     gen_buses = {int(b) for name in ("GENROU", "GENSAL", "GENCLS") if name in sheets
                  for b in sheets[name]["bus"]}
     ibr_hv = set()
@@ -426,6 +496,7 @@ def build_report(rows, out_path, *, title="IBR-FaultScreen report", case="ieee39
                      zip(RISK_RAMP, ("0–20%", "20–40%", "40–60%", "60–80%", "80–100%")))
     legend += f'<span><i style="background:{NO_DATA}"></i>no faults sampled</span>'
     legend += '<span><i class="sq"></i>generator bus</span><span><i class="ring"></i>IBR high-side bus</span>'
+    legend += '<span><i class="xf"></i>transformer</span>'
 
     slider = ""
     if max_ibr > 0:
@@ -491,6 +562,7 @@ svg.map {{ width:100%; height:auto; display:block; }}
 svg.map.tall {{ display:none; }}
 @media (max-width:640px) {{ svg.map.wide {{ display:none; }} svg.map.tall {{ display:block; max-width:440px; margin:0 auto; }} }}
 .map .edge {{ stroke:#b9b8b2; stroke-opacity:.8; stroke-width:1.6; animation:fade .6s ease both; }}
+.map .edge.xf {{ stroke-dasharray:5 4; }}
 .map .node {{ stroke:#fff; stroke-width:2; transition:fill .45s ease; animation:pop .45s ease-out both;
               transform-box:fill-box; transform-origin:center; }}
 .map .node.ibr {{ stroke:var(--teal); stroke-width:3.5; }}
@@ -513,6 +585,8 @@ svg.map.tall {{ display:none; }}
 .legend i {{ display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:5px; vertical-align:-2px; }}
 .legend i.sq {{ border-radius:3px; background:#fff; border:1.5px solid #9a9993; }}
 .legend i.ring {{ background:#fff; border:3px solid var(--teal); }}
+p.small {{ font-size:12px; margin:6px 0 0; }}
+.legend i.xf {{ width:18px; height:0; border-radius:0; border-top:2px dashed #9a9993; vertical-align:3px; }}
 
 /* tables: fit the width on desktop, cards on phones; never scroll sideways */
 .tabletools {{ display:none; margin:6px 0; font-size:13.5px; }}
@@ -591,6 +665,11 @@ details p {{ margin:0 0 6px; }}
 .plegend .ttl {{ color:var(--ink); font-weight:700; margin-right:4px; }}
 .plegend i {{ display:inline-block; width:16px; height:0; border-top:3px solid; vertical-align:3px; margin-right:5px; }}
 .plegend i.dash {{ border-top-style:dotted; }}
+.plegend i.area {{ height:10px; border:0; vertical-align:-1px; border-radius:2px; }}
+.plegend i.area.acc {{ background:rgba(235,104,52,.3); }}
+.plegend i.area.dec {{ background:rgba(42,120,214,.3); }}
+.eacp {{ margin-top:22px; padding-top:12px; border-top:1px solid var(--line, #e6e5e0); }}
+.eactxt {{ font-size:13px; line-height:1.5; margin:8px 0 0; }}
 .plegend i.band {{ height:10px; border:0; background:#d9d8d2; vertical-align:-1px; border-radius:2px; }}
 .plegend i.shade {{ height:10px; border:0; background:#ecebe6; vertical-align:-1px; border-radius:2px; }}
 .panel svg {{ display:block; width:100%; overflow:visible; touch-action:pan-y; }}
@@ -647,6 +726,7 @@ not replace an interconnection study. {_e(dataset_note)}</p>
 <div class="mapwrap">{map_html}</div>
 <p class="businfo" id="businfo" aria-live="polite">Select a bus to see its results.</p>
 <div class="legend">{legend}</div>
+<p class="muted small">{LAYOUT_NOTES[layout_source]}</p>
 <script id="mapdata" type="application/json">{_json_script(mdata)}</script>
 </section>
 
@@ -778,7 +858,7 @@ _JS = r"""
     }); });
     return;
   }
-  var NS = 'http://www.w3.org/2000/svg', cur = null, anim = null, views = [];
+  var NS = 'http://www.w3.org/2000/svg', cur = null, anim = null, views = [], eacView = null;
   function S(tag, attrs, parent) {
     var e = document.createElementNS(NS, tag);
     for (var k in attrs) e.setAttribute(k, attrs[k]);
@@ -827,7 +907,7 @@ _JS = r"""
     return h;
   }
   function render(d) {
-    var root = $('#trpanels'); root.innerHTML = ''; views = [];
+    var root = $('#trpanels'); root.innerHTML = ''; views = []; eacView = null;
     var w = root.clientWidth || 600, small = w < 520;
     var m = {l: small ? 40 : 50, r: 10, t: 10, b: 26}, Hh = small ? 150 : 175;
     var t = d.t, t0 = t[0], t1 = t[t.length - 1];
@@ -885,6 +965,68 @@ _JS = r"""
       hit.addEventListener('pointerdown', move);
       hit.addEventListener('pointerleave', function () { hover(null); });
     });
+    eacView = renderEac(d, root, w, small);
+  }
+  // Equal-area view: power against the equivalent rotor angle (first swing).
+  function cummax(a) { var out = [], m = -Infinity; a.forEach(function (v) { if (v !== null && v > m) m = v; out.push(m); }); return out; }
+  function renderEac(d, root, w, small) {
+    var e = d.eac; if (!e) return null;
+    var wrap = H('div', 'panel eacp', '', root);
+    var lg = '<span class="ttl">Equal-area view (first swing)</span>';
+    if (e.ok) lg += '<span><i class="area acc"></i>accelerating area ' + e.acc.toFixed(2) + '</span>' +
+      (e.dec > 0.005 ? '<span><i class="area dec"></i>decelerating area ' + e.dec.toFixed(2) + '</span>' : '') +
+      '<span><i style="border-color:#eb6834"></i>electrical power, fault on</span>' +
+      '<span><i style="border-color:#2a78d6"></i>after clearing</span>' +
+      '<span><i class="dash" style="border-color:#0b0b0b"></i>mechanical power</span>';
+    H('div', 'plegend', lg, wrap);
+    if (!e.ok) { H('p', 'muted eactxt', esc(e.text), wrap); return null; }
+    var m = {l: small ? 40 : 50, r: 10, t: 10, b: 30}, Hh = small ? 200 : 240;
+    var svg = S('svg', {width: w, height: Hh, viewBox: '0 0 ' + w + ' ' + Hh, role: 'img',
+                        'aria-label': 'Equal-area view: power versus equivalent rotor angle'}, wrap);
+    var pw = w - m.l - m.r, ph = Hh - m.t - m.b;
+    var x0 = e.xlim[0], x1 = e.xlim[1] > e.xlim[0] ? e.xlim[1] : e.xlim[0] + 1, lo = e.ylim[0], hi = e.ylim[1];
+    var X = function (v) { return m.l + (v - x0) / (x1 - x0) * pw; };
+    var Y = function (v) { return m.t + (1 - (v - lo) / (hi - lo)) * ph; };
+    var yt = ticks(lo, hi, small ? 3 : 4), ys = yt.length > 1 ? yt[1] - yt[0] : 1;
+    yt.forEach(function (v) {
+      S('line', {x1: m.l, x2: m.l + pw, y1: Y(v), y2: Y(v), 'class': 'gl'}, svg);
+      S('text', {x: m.l - 6, y: Y(v) + 4, 'class': 'ax', 'text-anchor': 'end'}, svg).textContent = fmtTick(v, ys);
+    });
+    var xt = ticks(x0, x1, small ? 4 : 7), xs = xt.length > 1 ? xt[1] - xt[0] : 1;
+    xt.forEach(function (v) {
+      S('line', {x1: X(v), x2: X(v), y1: m.t, y2: m.t + ph, 'class': 'gl'}, svg);
+      S('text', {x: X(v), y: Hh - 12, 'class': 'ax', 'text-anchor': 'middle'}, svg).textContent = fmtTick(v, xs);
+    });
+    S('text', {x: m.l + pw, y: Hh - 1, 'class': 'ax', 'text-anchor': 'end'}, svg).textContent = 'equivalent rotor angle (°)';
+    S('text', {x: m.l + 4, y: m.t + 12, 'class': 'ax'}, svg).textContent = 'power (pu)';
+    var cid = 'eclip' + Math.random().toString(36).slice(2, 7);
+    var clip = S('rect', {x: m.l - 2, y: 0, width: pw + 4, height: Hh}, S('clipPath', {id: cid}, S('defs', {}, svg)));
+    var g = S('g', {'clip-path': 'url(#' + cid + ')'}, svg);
+    var n = e.d.length, kc = e.kc, i, a = '', b = '';
+    for (i = 0; i <= kc; i++) a += (i ? 'L' : 'M') + X(e.d[i]).toFixed(1) + ' ' + Y(e.pm[i]).toFixed(1);
+    for (i = kc; i >= 0; i--) a += 'L' + X(e.d[i]).toFixed(1) + ' ' + Y(e.acc_lo[i] === null ? e.pm[i] : e.acc_lo[i]).toFixed(1);
+    if (a) S('path', {d: a + 'Z', fill: '#eb6834', 'fill-opacity': 0.22}, g);
+    if (e.dec > 0.005) {
+      for (i = kc; i < n; i++) b += (i > kc ? 'L' : 'M') + X(e.d[i]).toFixed(1) + ' ' + Y(e.pm[i]).toFixed(1);
+      for (i = n - 1; i >= kc; i--) b += 'L' + X(e.d[i]).toFixed(1) + ' ' + Y(e.dec_hi[i] === null ? e.pm[i] : e.dec_hi[i]).toFixed(1);
+      S('path', {d: b + 'Z', fill: '#2a78d6', 'fill-opacity': 0.22}, g);
+    }
+    var seg = function (from, to, key) { var s = ''; for (var j = from; j <= to; j++) s += (j > from ? 'L' : 'M') + X(e.d[j]).toFixed(1) + ' ' + Y(e[key][j]).toFixed(1); return s; };
+    S('path', {d: seg(0, n - 1, 'pm'), fill: 'none', stroke: '#0b0b0b', 'stroke-width': 1.3, 'stroke-dasharray': '5 4'}, g);
+    S('path', {d: seg(0, kc, 'pe'), fill: 'none', stroke: '#eb6834', 'stroke-width': 2.2, 'stroke-linejoin': 'round'}, g);
+    S('path', {d: seg(kc, n - 1, 'pe'), fill: 'none', stroke: '#2a78d6', 'stroke-width': 2.2, 'stroke-linejoin': 'round'}, g);
+    var mk = S('circle', {r: 4.5, cx: 0, cy: 0, fill: '#0b0b0b', opacity: 0}, svg);
+    var tone = e.stable ? 'good' : 'bad';
+    H('p', 'eactxt', '<span class="pill ' + tone + '">' + (e.stable ? 'first swing stable' : 'first swing unstable') + '</span> ' +
+      esc(e.text) + '<br><span class="muted">Leading group: ' + esc(e.lead.join(', ')) + ' · against: ' + esc(e.others.join(', ')) +
+      '. Orange area: energy the leading machines gain while the fault is on. Blue area: energy given back after clearing. ' +
+      'The swing stops when the blue area equals the orange one; if it cannot, the machines lose step. ' +
+      'This view covers rotor-angle stability only, from the simulated trajectories (no extrapolation).</span>', wrap);
+    return {e: e, clip: clip, X: X, Y: Y, l: m.l, pw: pw, mk: mk, reach: cummax(e.d)};
+  }
+  function eacAt(tt) {   // index into the equal-area window for time tt, or -1 before it
+    var e = eacView.e; if (tt < e.t[0]) return -1;
+    return idxOf(e.t, Math.min(tt, e.t[e.t.length - 1]));
   }
   function idxOf(t, v) { var a = 0, b = t.length - 1;
     while (b - a > 1) { var c = (a + b) >> 1; if (t[c] <= v) a = c; else b = c; }
@@ -892,6 +1034,7 @@ _JS = r"""
   function hover(tt) {
     var d = TR[cur], ro = $('#readout');
     if (tt === null) { views.forEach(function (v) { v.hline.setAttribute('opacity', 0); });
+      if (eacView) eacView.mk.setAttribute('opacity', 0);
       ro.innerHTML = '<span>Hover or touch a chart to read values.</span>'; return; }
     var i = idxOf(d.t, tt), h = '<span><b>t = ' + d.t[i].toFixed(3) + ' s</b></span>';
     views.forEach(function (v) {
@@ -902,11 +1045,23 @@ _JS = r"""
              s.y[i].toFixed(v.p.nd) + (v.p.unit ? ' ' + v.p.unit : '') + '</b></span>';
       });
     });
+    if (eacView) {
+      var k = eacAt(d.t[i]), ev = eacView;
+      if (k < 0 || d.t[i] > ev.e.t[ev.e.t.length - 1] + 1e-9) ev.mk.setAttribute('opacity', 0);
+      else {
+        ev.mk.setAttribute('cx', ev.X(ev.e.d[k])); ev.mk.setAttribute('cy', ev.Y(ev.e.pe[k])); ev.mk.setAttribute('opacity', 1);
+        h += '<span><i style="background:#0b0b0b"></i>equivalent angle <b>' + ev.e.d[k].toFixed(1) + ' °</b>, P<sub>e</sub> <b>' +
+             ev.e.pe[k].toFixed(2) + '</b>, P<sub>m</sub> <b>' + ev.e.pm[k].toFixed(2) + ' pu</b></span>';
+      }
+    }
     ro.innerHTML = h;
   }
   function animate() {
     if (anim) cancelAnimationFrame(anim);
-    if (reduce) { views.forEach(function (v) { v.clip.setAttribute('width', v.pw + 4); }); return; }
+    if (reduce) { views.forEach(function (v) { v.clip.setAttribute('width', v.pw + 4); });
+      if (eacView) eacView.clip.setAttribute('width', eacView.pw + 4); return; }
+    var d = TR[cur], ta = d.t[0], tb = d.t[d.t.length - 1];
+    if (eacView) eacView.clip.setAttribute('width', 0);
     var start = null, dur = 2200;
     views.forEach(function (v) { v.clip.setAttribute('width', 0); v.cline.setAttribute('opacity', 1); });
     function step(ts) {
@@ -918,6 +1073,10 @@ _JS = r"""
         v.cline.setAttribute('x1', x); v.cline.setAttribute('x2', x);
         if (f >= 1) { v.clip.setAttribute('width', v.pw + 4); v.cline.setAttribute('opacity', 0); }
       });
+      if (eacView) {
+        var k = eacAt(ta + f * (tb - ta)), ev = eacView;
+        ev.clip.setAttribute('width', f >= 1 ? ev.pw + 4 : k < 0 ? 0 : Math.max(0, ev.X(ev.reach[k]) - ev.l + 2));
+      }
       if (f < 1) anim = requestAnimationFrame(step);
     }
     anim = requestAnimationFrame(step);
@@ -955,6 +1114,7 @@ _JS = r"""
     var sec = $('#trajectories');
     if ('IntersectionObserver' in window && !reduce) {
       views.forEach(function (v) { v.clip.setAttribute('width', 0); });
+      if (eacView) eacView.clip.setAttribute('width', 0);
       var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { io.disconnect(); animate(); } }, {threshold: 0.25});
       io.observe(sec);
     }

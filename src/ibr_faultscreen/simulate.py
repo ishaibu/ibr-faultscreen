@@ -56,6 +56,12 @@ class Trajectories:
     ibr_ip: np.ndarray                 # active current, pu on system base
     ibr_iq: np.ndarray                 # reactive current, pu on system base
     ibr_imax: np.ndarray               # current limit, pu on system base (one per IBR)
+    #: Synchronous machines, same columns as `delta`: electrical (air-gap) and
+    #: mechanical torque, pu on the system base, and inertia M = 2H on the
+    #: system base (s). Used by the equal-area view. Empty when not recorded.
+    te: np.ndarray | None = None
+    tm: np.ndarray | None = None
+    machine_m: np.ndarray | None = None
 
     def bus_v(self, bus):
         return self.v[:, self.bus_ids.index(bus)]
@@ -123,15 +129,19 @@ def _series(system, var):
 def _collect(system, changes) -> Trajectories:
     t = np.asarray(system.dae.ts.t, dtype=float)
     fn = float(system.config.freq)
-    machine_ids, deltas, omegas = [], [], []
+    machine_ids, deltas, omegas, tes, tms, ms = [], [], [], [], [], []
     for name in SYNC_MACHINE_SHEETS:
         gen = getattr(system, name, None)
         if gen is not None and gen.n:
             machine_ids += list(gen.idx.v)
             deltas.append(_series(system, gen.delta))
             omegas.append(_series(system, gen.omega))
-    delta = np.hstack(deltas) if deltas else np.empty((t.size, 0))
-    omega = np.hstack(omegas) if omegas else np.empty((t.size, 0))
+            tes.append(_series(system, gen.te))
+            tms.append(_series(system, gen.tm))
+            ms.append(np.asarray(gen.M.v, dtype=float))
+    empty = np.empty((t.size, 0))
+    delta = np.hstack(deltas) if deltas else empty
+    omega = np.hstack(omegas) if omegas else empty
     reg = system.REGCA1
     n = reg.n if hasattr(system, "REGCA1") else 0
     hv = {str(c["gen"]): c["hv_bus"] for c in changes}
@@ -145,6 +155,8 @@ def _collect(system, changes) -> Trajectories:
         ibr_ip=_series(system, reg.Ipout) if n else np.empty((t.size, 0)),
         ibr_iq=_series(system, reg.Iqout_x) if n else np.empty((t.size, 0)),
         ibr_imax=np.asarray(system.REECA1.Imax.v, dtype=float) if n else np.empty(0),
+        te=np.hstack(tes) if tes else empty, tm=np.hstack(tms) if tms else empty,
+        machine_m=np.concatenate(ms) if ms else np.empty(0),
     )
 
 
@@ -208,7 +220,17 @@ DEAD_BUS_DELAY_S = 0.05
 
 
 def _dead_bus(result):
-    """(bus, seconds) of the longest post-clearing stay at ~0 V, or None."""
+    """(bus, seconds) of a non-physical stay at ~0 V after clearing, or None.
+
+    Two cases count: a bus held at ~0 V for at least DEAD_BUS_S, or a bus held
+    at ~0 V for the whole time from the settling delay until the run stopped
+    early. A run stopped on the angle limit can end before DEAD_BUS_S has
+    passed: in 2026-10, 107 of the 391 angle-unstable runs of the published
+    5,000-scenario dataset had a bus that snapped to exactly 0 V at the
+    clearing instant and stayed there (clearing a fault cannot do that), and
+    ANDES then reported them as angle instability. A brief dip to ~0 V only at
+    the end of a run (a real pole slip) is not flagged.
+    """
     f, tr = result.scenario.fault, result.traj
     if f is None:
         return None
@@ -219,14 +241,19 @@ def _dead_bus(result):
     dead = np.abs(tr.v[after]) <= DEAD_BUS_PU
     dt = np.diff(t)
     worst = (None, 0.0)
+    whole = None
     for j in np.flatnonzero(dead.any(axis=0)):
+        if dead[:, j].all() and whole is None:
+            whole = (tr.bus_ids[j], float(t[-1] - t[0]))
         run = best = 0.0
         for d, step in zip(dead[:-1, j], dt):
             run = run + step if d else 0.0
             best = max(best, run)
         if best > worst[1]:
             worst = (tr.bus_ids[j], best)
-    return worst if worst[1] >= DEAD_BUS_S else None
+    if worst[1] >= DEAD_BUS_S:
+        return worst
+    return whole
 
 
 def _check_physical(result):
@@ -241,7 +268,8 @@ def _check_physical(result):
     else:
         dead = _dead_bus(result)
         if dead:
-            problem = (f"bus {dead[0]} held at 0 V for {dead[1]:.2f} s after clearing "
+            until = " until the run stopped" if dead[1] < DEAD_BUS_S else ""
+            problem = (f"bus {dead[0]} held at 0 V for {dead[1]:.2f} s after clearing{until} "
                        "(false voltage collapse)")
     if problem:
         result.message = "; ".join(filter(None, [

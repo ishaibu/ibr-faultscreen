@@ -97,6 +97,23 @@ def test_bus_held_at_zero_after_clearing_is_non_physical():
     assert r.status == "sim_fail" and "bus 1 held at 0 V" in r.message
 
 
+def test_bus_dead_until_an_early_stop_is_non_physical():
+    # A run stopped on the angle limit 0.1 s after clearing: shorter than the
+    # 0.1 s rule after the settling delay, but the bus never recovered.
+    def dead(t, V):
+        V[t >= 1.0, 1] = 0.0                            # faulted bus, cleared at 1.1 s
+    r = _fake(dead, t_end=1.2)
+    assert r.status == "sim_fail"
+    assert "bus 2 held at 0 V" in r.message and "until the run stopped" in r.message
+
+
+def test_brief_dip_at_the_end_of_a_run_is_physical():
+    # A bus passing through ~0 V only at the very end (a pole slip) is not flagged.
+    def dip(t, V):
+        V[-1, 2] = 0.0
+    assert _fake(dip, t_end=1.3).status == "completed"
+
+
 def test_faulted_bus_at_zero_during_fault_is_physical():
     def bolted(t, V):
         V[(t >= 1.0) & (t < 1.1), 1] = 0.0             # only while the fault is on

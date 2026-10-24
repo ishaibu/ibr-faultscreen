@@ -150,11 +150,35 @@ def cmd_cct(a):
                                    angle_limit_deg=settings.angle_limit_deg)
         out.append({"fault_bus": bus, **r.summary(), "text": r.text()})
         print(f"bus {bus}: {r.text()}")
+        if not a.no_equal_area and r.stable_s is not None:
+            _cct_equal_area(sc, r, a, bus)
     if a.out:
         make_output_dir(Path(a.out).parent)
         _write_csv(a.out, out)
         print(f"Saved {a.out}")
     return 0
+
+
+def _cct_equal_area(sc, r, a, bus):
+    """Equal-area view just below and above the CCT (two more simulations)."""
+    from dataclasses import replace
+    from .equal_area import equal_area
+    from .simulate import simulate
+    runs = []
+    for label_, ct in (("just stable", r.stable_s), ("just unstable", r.unstable_s)):
+        if ct is None:
+            continue
+        res = simulate(replace(sc, fault=replace(sc.fault, clear_time=ct), t_end=sc.fault.t_start + ct + 2.0))
+        ea = equal_area(res)
+        print(f"  equal-area view, {label_} ({ct * 1000:.0f} ms): {ea.text()}")
+        runs.append(res if ea.applicable else None)
+    if a.out and runs and runs[0] is not None:
+        from .plots import plot_cct_equal_area
+        png = Path(a.out).with_name(f"cct_b{bus}_equal_area.png")
+        make_output_dir(png.parent)
+        plot_cct_equal_area(runs[0], runs[1] if len(runs) > 1 else None, png,
+                            title=f"Fault at bus {bus}: equal-area view around the critical clearing time")
+        print(f"  saved {png}")
 
 
 def cmd_dataset(a):
@@ -167,15 +191,21 @@ def cmd_dataset(a):
         kw["fault_buses"] = tuple(int(b) for b in a.fault_buses)
     if a.ibr_gens:
         kw["ibr_gens"] = tuple(int(g) for g in a.ibr_gens)
-    plan = SamplingPlan(**kw)
-    scenarios = sample_scenarios(plan)
+    if a.scenarios:
+        from .scenario import load_scenarios
+        plan, scenarios = None, load_scenarios(a.scenarios)     # checks ids are unique
+    else:
+        plan = SamplingPlan(**kw)
+        scenarios = sample_scenarios(plan)
     if a.dyr:
         from dataclasses import replace
         scenarios = [replace(s, dyr=a.dyr) for s in scenarios]
     make_output_dir(a.out)
-    print(f"{len(scenarios)} scenarios, seed {a.seed}, {a.workers or 'auto'} workers -> {a.out}")
+    origin = f"from {Path(a.scenarios).name}" if a.scenarios else f"seed {a.seed}"
+    print(f"{len(scenarios)} scenarios ({origin}), {a.workers or 'auto'} workers -> {a.out}")
     r = run_dataset(scenarios, settings, a.out, workers=a.workers, timeout_s=a.timeout,
-                    plan=plan, criteria_source=src, progress=lambda m: print(m, flush=True))
+                    plan=plan, criteria_source=src, progress=lambda m: print(m, flush=True),
+                    scenario_source=Path(a.scenarios).name if a.scenarios else "")
     print(f"\nDone in {r.seconds / 60:.1f} min. Outcomes: {r.counts}")
     if r.dataset_csv:
         print(f"Dataset:   {r.dataset_csv}\nData card: {r.data_card}")
@@ -320,10 +350,14 @@ def build_parser():
     s.add_argument("--t-min", type=float, default=0.02)
     s.add_argument("--t-max", type=float, default=0.5)
     s.add_argument("--criteria")
-    s.add_argument("--out", help="save results to this .csv")
+    s.add_argument("--out", help="save results to this .csv (and an equal-area figure per bus)")
+    s.add_argument("--no-equal-area", action="store_true",
+                   help="skip the equal-area view just below and above the CCT")
     s.set_defaults(func=cmd_cct)
 
     s = sub.add_parser("dataset", help="generate a labeled dataset (resumable)")
+    s.add_argument("--scenarios", help="run the scenarios in this .yaml or .csv file instead of "
+                                       "sampling them (the sampling options are then ignored)")
     s.add_argument("--n", type=int, default=200)
     s.add_argument("--seed", type=int, default=2026)
     s.add_argument("--case", default="ieee39")

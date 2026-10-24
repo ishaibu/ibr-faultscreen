@@ -1,0 +1,53 @@
+# Drawing positions for the IEEE 39-bus (New England) test system, used by the
+# network map in reports. They follow the usual one-line arrangement of this
+# system: generator 10 (bus 30) and bus 2 at the upper left, the 345 kV ring
+# through buses 1-9 down the left side and across the bottom, bus 16 near the
+# middle, generators 6 and 7 (buses 35, 36) at the right, and bus 39 (the
+# slack, generator 1 in the original numbering) at the lower left.
+#
+# Units are arbitrary drawing units: x to the right, y downward. The positions
+# are a drawing, not geography. The same file is meant to be shared with
+# SCR-Screen so both tools draw this network the same way.
+#
+# Checked by tests/test_report_layout.py: every bus of the case has a position,
+# no two lines cross, and no bus sits on a line it is not connected to.
+positions:
+  1: [1.0, 5.6]
+  2: [2.0, 2.6]
+  3: [3.5, 4.0]
+  4: [4.0, 5.6]
+  5: [3.4, 7.0]
+  6: [4.8, 7.2]
+  7: [3.6, 8.2]
+  8: [2.6, 8.6]
+  9: [1.6, 9.3]
+  10: [7.0, 9.2]
+  11: [5.9, 7.4]
+  12: [7.0, 7.95]
+  13: [8.1, 7.4]
+  14: [6.0, 5.8]
+  15: [7.6, 5.8]
+  16: [9.2, 5.2]
+  17: [8.0, 4.6]
+  18: [5.5, 4.0]
+  19: [10.0, 7.4]
+  20: [9.4, 8.6]
+  21: [11.5, 4.4]
+  22: [13.5, 4.4]
+  23: [13.5, 6.2]
+  24: [11.0, 6.0]
+  25: [3.5, 1.6]
+  26: [7.5, 1.6]
+  27: [8.0, 3.4]
+  28: [11.0, 0.9]
+  29: [13.0, 2.0]
+  30: [0.6, 1.4]
+  31: [5.2, 8.6]
+  32: [7.0, 10.2]
+  33: [11.0, 8.6]
+  34: [9.4, 9.7]
+  35: [15.4, 4.4]
+  36: [15.4, 6.2]
+  37: [3.5, 0.4]
+  38: [14.6, 1.0]
+  39: [0.6, 8.2]

@@ -2,6 +2,40 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - unreleased
+
+### Added
+- **Equal-area view** of every simulated scenario: the machines are reduced to a
+  single-machine equivalent built from the simulated trajectories, and the
+  accelerating and decelerating areas are drawn (fifth panel of each PNG figure,
+  animated in the interactive report). Checked against the textbook
+  single-machine case (`tests/test_equal_area.py`, `docs/verification.md` §3).
+- `cct` shows the equal-area view just below and just above the critical
+  clearing time and saves a side-by-side figure with `--out`
+  (`--no-equal-area` skips it).
+- `dataset --scenarios LIST.csv` runs any list of scenarios in parallel,
+  resumably, with a data card.
+- `tools/explorer_scenarios.py`: the scenario list behind the demo's explorer.
+- Python: `ibr_faultscreen.equal_area.equal_area(result)`.
+
+### Changed
+- Network map: the IEEE 39-bus case uses a fixed drawing that follows the usual
+  one-line arrangement (shared with SCR-Screen); transformers are dashed; the
+  map says whether positions are fixed, from the case, or automatic (never
+  geographic). On phones the drawing is turned, not mirrored.
+- Simulation records each synchronous machine's electrical and mechanical torque
+  and inertia (needed for the equal-area view).
+- GitHub workflows use the Node 24 versions of the checkout, setup-python and
+  artifact actions.
+
+### Fixed
+- A run in which a bus snapped to exactly 0 V at the clearing instant and stayed
+  there was reported as angle instability when it stopped on the angle limit
+  before the 0.1 s false-collapse rule applied. It now counts as non-physical,
+  and the milder-fault check handles it. In the 5,000-scenario dataset
+  published with 0.1.0 this affected 107 of the 391 angle-unstable scenarios
+  (now 82 RISKY confirmed, 25 RISKY unresolved).
+
 ## [0.1.0] - 2026-10-09
 
 First public release.

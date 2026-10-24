@@ -56,7 +56,8 @@ def unknown_by_bus(rows):
     return sorted(((b, n[b], u[b]) for b in n if u[b]), key=lambda t: (-t[2] / t[1], -t[2]))
 
 
-def write_data_card(dataset_csv, path, plan=None, settings=None, criteria_source=""):
+def write_data_card(dataset_csv, path, plan=None, settings=None, criteria_source="",
+                    scenario_source=""):
     with open(dataset_csv, newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
     n = len(rows)
@@ -85,8 +86,10 @@ def write_data_card(dataset_csv, path, plan=None, settings=None, criteria_source
         "- RMS positive-sequence time-domain simulation (ANDES). IBRs replace synchronous "
         "machines using the WECC generic models REGCA1 + REECA1 + REPCA1 with ANDES "
         "example parameters.",
-        "- Scenarios: Latin hypercube over load level and clearing time, fault buses spread "
-        "evenly, random IBR sets (see the sampling plan below). Same seed, same file.",
+        (f"- Scenarios: listed in the file `{scenario_source}` (one run per listed scenario)."
+         if scenario_source else
+         "- Scenarios: Latin hypercube over load level and clearing time, fault buses spread "
+         "evenly, random IBR sets (see the sampling plan below). Same seed, same file."),
         "- Bolted faults (milder-fault check): a bolted fault that cannot be solved is rerun at milder "
         "faults; `resolution` is `confirmed` (milder fault already RISKY) or `unresolved`.",
         f"- Criteria file: {criteria_source or 'not recorded'}.",

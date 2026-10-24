@@ -8,6 +8,9 @@
 3. Bus frequency measured over `freq_window_s`, with limits; the skipped
    fault period is shaded.
 4. IBR current as a fraction of its limit.
+5. Equal-area view (single-machine equivalent, first swing): electrical and
+   mechanical power against the equivalent rotor angle, with the accelerating
+   and decelerating areas (see equal_area.py).
 
 The voltage ride-through bands are drawn as faint horizontal lines on panel 1.
 """
@@ -23,6 +26,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from .criteria import CriteriaSettings  # noqa: E402
+from .equal_area import equal_area, short_names  # noqa: E402
 from .label import ScenarioLabels  # noqa: E402
 from .simulate import SimResult  # noqa: E402
 
@@ -32,6 +36,73 @@ from .simulate import SimResult  # noqa: E402
 C_FAULT = "#eb6834"
 IBR_COLORS = ("#2a78d6", "#1baf7a", "#4a3aa7", "#e87ba4")
 INK, INK2, GRID, BG_LINE = "#0b0b0b", "#52514e", "#e6e5e0", "#c9c8c2"
+# Equal-area panel: power while the fault is on, power after clearing.
+C_ACC, C_DEC = "#eb6834", "#2a78d6"
+
+
+def _shown_run(result):
+    """The run whose trajectories are shown: the result itself, or the milder
+    rerun when the bolted run failed."""
+    if result.status == "sim_fail":
+        return result.solved_diagnostic()
+    return result
+
+
+def eac_payload(result: SimResult) -> dict:
+    """Equal-area view of the shown run, as plain JSON for the interactive report."""
+    run = _shown_run(result)
+    if run is None:
+        return {"ok": False, "text": "Equal-area view not available: the simulation did not finish."}
+    ea = equal_area(run)
+    if not ea.applicable:
+        return {"ok": False, "text": ea.text()}
+    d, pm, pe = ea.delta_deg, ea.pm, ea.pe
+    on = ea.t <= ea.t_clear + 1e-9
+    acc_lo = np.where(on, np.minimum(pe, pm), np.nan)
+    dec_hi = np.where(~on, np.maximum(pe, pm), np.nan)
+    kc = int(np.flatnonzero(on)[-1]) if on.any() else 0
+    ys = np.concatenate([pm, pe])
+    lo, hi = float(np.nanmin(ys)), float(np.nanmax(ys))
+    pad = 0.08 * (hi - lo or 1.0)
+    return {"ok": True, "text": ea.detail(), "stable": ea.stable,
+            "lead": short_names(ea.leading), "others": short_names(ea.others),
+            "acc": round(ea.accelerating, 3), "dec": round(ea.decelerating, 3),
+            "t": _round(ea.t, 4), "d": _round(d, 2), "pm": _round(pm, 3), "pe": _round(pe, 3),
+            "acc_lo": _round(acc_lo, 3), "dec_hi": _round(dec_hi, 3), "kc": kc,
+            "ylim": [round(lo - pad, 3), round(hi + pad, 3)],
+            "xlim": [round(float(np.nanmin(d)), 2), round(float(np.nanmax(d)), 2)]}
+
+
+def _plot_eac(ax, result):
+    run = _shown_run(result)
+    ea = equal_area(run) if run is not None else None
+    if ea is None or not ea.applicable:
+        msg = ea.text() if ea is not None else "Equal-area view not available: the simulation did not finish."
+        ax.text(0.5, 0.5, msg, transform=ax.transAxes, ha="center", va="center", color=INK2,
+                fontsize=8.5, wrap=True)
+        ax.set_xticks([]); ax.set_yticks([])
+        for s in ax.spines.values():
+            s.set_visible(False)
+        return
+    d, pm, pe = ea.delta_deg, ea.pm, ea.pe
+    on = ea.t <= ea.t_clear + 1e-9
+    after = ~on
+    if on.any() and after.any():                 # join the curves at the clearing instant
+        after[np.flatnonzero(on)[-1]] = True
+    ax.fill_between(d[on], np.minimum(pe[on], pm[on]), pm[on], color=C_ACC, alpha=0.22, linewidth=0,
+                    label=f"accelerating area {ea.accelerating:.2f} pu·rad")
+    if ea.decelerating > 0.005:
+        ax.fill_between(d[after], pm[after], np.maximum(pe[after], pm[after]), color=C_DEC, alpha=0.22,
+                        linewidth=0, label=f"decelerating area {ea.decelerating:.2f} pu·rad")
+    ax.plot(d[on], pe[on], color=C_ACC, linewidth=2, label="electrical power, fault on")
+    ax.plot(d[after], pe[after], color=C_DEC, linewidth=2, label="electrical power, after clearing")
+    ax.plot(d, pm, color=INK, linewidth=1.2, linestyle="--", label="mechanical power")
+    _style(ax, "Power (pu, system base)")
+    ax.set_xlabel("Equivalent rotor angle (°): leading group vs. the rest", color=INK2, fontsize=9)
+    head = "first swing stable" if ea.stable else "first swing unstable"
+    ax.set_title(f"Equal-area view ({head}). Leading group: {', '.join(short_names(ea.leading))}",
+                 fontsize=9.5, color=INK, loc="left", pad=6)
+    ax.legend(loc="best", fontsize=7.5, frameon=True, framealpha=0.9, edgecolor=GRID)
 
 
 def _ibr_color(k):
@@ -91,7 +162,7 @@ def trace_payload(result: SimResult, labels: ScenarioLabels, settings: CriteriaS
         "ibrs": "IBRs: " + (", ".join(f"{c['kind']} on gen {c['gen']} (bus {c['bus']}→{c['hv_bus']})"
                                       for c in result.changes) or "none"),
         "banner": None, "reasons": list(labels.reasons), "panels": None,
-        "message": result.message,
+        "message": result.message, "eac": eac_payload(result),
     }
     tr = result.traj
     diag = result.solved_diagnostic() if result.status == "sim_fail" else None
@@ -194,8 +265,13 @@ def plot_scenario(result: SimResult, labels: ScenarioLabels, settings: CriteriaS
     """Save the review figure for one scenario and return its path."""
     path = Path(path)
     sc = result.scenario
-    fig, axes = plt.subplots(4, 1, figsize=(9, 10.5), sharex=True,
-                             gridspec_kw={"hspace": 0.32})
+    fig = plt.figure(figsize=(9, 13.6))
+    gs = fig.add_gridspec(6, 1, height_ratios=[1, 1, 1, 1, 0.28, 1.25], hspace=0.32)
+    axes = [fig.add_subplot(gs[0])]
+    axes += [fig.add_subplot(gs[i], sharex=axes[0]) for i in (1, 2, 3)]
+    for ax in axes[:3]:
+        ax.tick_params(labelbottom=False)
+    ax_eac = fig.add_subplot(gs[5])
     verdict = "RISKY" if labels.risky else "OK"
     if labels.resolution:
         verdict += f" ({labels.resolution})"
@@ -208,7 +284,7 @@ def plot_scenario(result: SimResult, labels: ScenarioLabels, settings: CriteriaS
                                 for c in result.changes) or "none")
     fig.suptitle(f"{sc.scenario_id}: {verdict}" + (f"  [{', '.join(flags)}]" if flags else ""),
                  x=0.06, ha="left", fontsize=12, color=INK, fontweight="bold")
-    fig.text(0.06, 0.945, f"{ftxt} · load ×{sc.load_scale:g} · status: {result.status}\n{ibrs}",
+    fig.text(0.06, 0.957, f"{ftxt} · load ×{sc.load_scale:g} · status: {result.status}\n{ibrs}",
              fontsize=8, color=INK2, va="top", linespacing=1.5)
 
     tr = result.traj
@@ -218,11 +294,11 @@ def plot_scenario(result: SimResult, labels: ScenarioLabels, settings: CriteriaS
         tr, fault = diag.traj, diag.scenario.fault
         resid = ("" if diag.fault_residual_pu is None
                  else f", faulted bus at {diag.fault_residual_pu:.2f} pu")
-        fig.text(0.06, 0.905, f"Bolted run failed. Showing a MILDER fault (x = {fault.x_pu:g} pu"
+        fig.text(0.06, 0.927, f"Bolted run failed. Showing a MILDER fault (x = {fault.x_pu:g} pu"
                  f"{resid}), NOT the bolted case.", fontsize=8.5, color=C_FAULT,
                  fontweight="bold", va="top")
     if tr is None:
-        for ax in axes:
+        for ax in axes + [ax_eac]:
             ax.axis("off")
         axes[0].text(0, 0.5, f"No trajectories: {result.message}", fontsize=10, color=INK)
         fig.savefig(path, dpi=130, bbox_inches="tight")
@@ -309,11 +385,37 @@ def plot_scenario(result: SimResult, labels: ScenarioLabels, settings: CriteriaS
         for ax in axes[:2]:
             ax.axvspan(*shade, color=GRID, alpha=0.5, zorder=0)
 
+    # 5. Equal-area view
+    _plot_eac(ax_eac, result)
+
     reasons = labels.reasons
     if reasons:
         txt = "\n".join(r if len(r) < 150 else r[:147] + "…" for r in reasons[:4])
         fig.text(0.06, 0.01, txt, fontsize=7, color=INK2, va="bottom")
-    fig.subplots_adjust(top=0.875 if diag is not None else 0.885, bottom=0.08 + 0.018 * min(len(reasons), 4))
+    fig.subplots_adjust(top=0.904 if diag is not None else 0.911, bottom=0.062 + 0.014 * min(len(reasons), 4))
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
+def plot_cct_equal_area(stable: SimResult, unstable: SimResult | None, path: str | Path,
+                        title: str = "") -> Path:
+    """Equal-area views just below and just above the critical clearing time,
+    side by side (the textbook picture of the CCT: the areas just balance)."""
+    path = Path(path)
+    runs = [r for r in (stable, unstable) if r is not None]
+    fig, axes = plt.subplots(1, len(runs), figsize=(6.2 * len(runs), 4.6), squeeze=False)
+    for ax, r in zip(axes[0], runs):
+        _plot_eac(ax, r)
+        ct = r.scenario.fault.clear_time
+        old = ax.get_title(loc="left")
+        rest = old.replace("Equal-area view (", "").replace(")", "", 1) if old else ""
+        head, _, group = rest.partition(". ")
+        ax.set_title(f"Cleared in {ct * 1000:.0f} ms ({ct * 60:.1f} cycles)" + (f": {head}" if head else "")
+                     + (f"\n{group}" if group else ""), fontsize=9, loc="left")
+    if title:
+        fig.suptitle(title, x=0.02, ha="left", fontsize=11, fontweight="bold", color=INK)
+    fig.tight_layout()
     fig.savefig(path, dpi=130)
     plt.close(fig)
     return path

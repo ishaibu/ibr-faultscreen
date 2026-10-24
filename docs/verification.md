@@ -50,3 +50,28 @@ For each case, decide **inside** (must ride through) or **outside** (may trip):
 | g | two 0.1 s dips to 0.30 pu, 0.5 s apart: continuous / cumulative | | inside / outside |
 
 Date: ________
+
+## 3. Equal-area areas for the same single-machine case
+
+Same data and fault as check 1, cleared in **0.15 s** (9 cycles). During the
+fault P_e = 0, so the machine accelerates at a constant rate.
+
+**Steps**
+1. Angle at clearing: δ_c = δ₀ + ω_s·P_m·t_c² / (4H) (radians).
+2. Accelerating area: A_acc = P_m·(δ_c − δ₀) (pu·rad).
+3. After clearing, P_e = P_max·sin δ with P_max = |E'|·1.0 / (X'd + X).
+4. Maximum angle δ_m: solve P_max·(cos δ_c − cos δ_m) − P_m·(δ_m − δ_c) = A_acc
+   (the decelerating area equals the accelerating area; use goal seek or trial
+   values in a spreadsheet).
+5. Stable if δ_m exists below δ_u = π − asin(P_m / P_max).
+
+| Quantity | Your value | Code value (tests/test_equal_area.py) | Match? |
+|---|---|---|---|
+| P_max (pu) | | 1.9106 | |
+| δ_c (deg) | | 66.13 | |
+| A_acc (pu·rad) | | 0.597 (simulated 0.597) | |
+| δ_m (deg) | | 101.4 (simulated 101.6) | within 1°? |
+| Stable? | | yes | |
+
+Date: ________  IBR-FaultScreen version: ______  Method: hand calculator / own spreadsheet
+
