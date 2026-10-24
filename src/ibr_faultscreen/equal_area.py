@@ -22,12 +22,19 @@ increasing; at that point the two areas are equal (energy balance). It is
 unstable when the angle keeps increasing: the energy left over is the
 accelerating area minus the decelerating area used so far.
 
+How IBRs enter: they have no rotor angle, so they are never part of either
+group. They act through the network: a converted machine's inertia,
+synchronizing power and mechanical power leave the equivalent, and the IBR's
+current during and after the fault changes the bus voltages and so the
+machines' electrical power (the Pe curve). Their own risks (ride-through,
+current limits, control stability) are judged by the other checks.
+
 What this view does NOT do:
 - It explains rotor-angle stability only. Voltage recovery, IBR ride-through
   and frequency are separate checks.
 - It shows only what was simulated. It does not extrapolate a stability margin.
-- The two-group split uses the largest gap between rotor angles at the moment
-  of largest spread. When machines separate into three or more groups, the
+- The two-group split uses the largest gap between the machines' angle changes
+  since the fault started, at the moment of largest spread. When machines separate into three or more groups, the
   picture is a simplification (the result says so).
 """
 
@@ -45,6 +52,8 @@ MULTI_GROUP_RATIO = 0.5
 MULTI_GROUP_MIN_DEG = 30.0
 #: Gaps smaller than this (deg) are not a real separation.
 MIN_SEPARATION_DEG = 10.0
+#: The first swing is looked for up to this long after clearing (s).
+FIRST_SWING_S = 1.0
 #: A drop smaller than this (rad) is numerical noise, not the end of the swing.
 TURN_TOL_RAD = 1e-5
 
@@ -68,6 +77,8 @@ class EqualAreaResult:
     stable: bool | None = None             # first swing
     delta_end_deg: float = 0.0             # angle where the swing stopped (or the run ended)
     multi_group: bool = False
+    #: The two groups separated by less than MIN_SEPARATION_DEG: a small swing.
+    small_swing: bool = False
     #: First swing stable but the run stopped on the angle limit later.
     later_swing_unstable: bool = False
 
@@ -81,10 +92,17 @@ class EqualAreaResult:
         if self.stable:
             s = (f"The angle stopped at {self.delta_end_deg:.0f}°: accelerating area "
                  f"{self.accelerating:.2f} = decelerating area {self.decelerating:.2f} pu·rad.")
-        else:
+        elif self.decelerating > 0:
             s = (f"Accelerating area {self.accelerating:.2f} pu·rad, decelerating area only "
-                 f"{max(self.decelerating, 0):.2f}: {self.leftover:.2f} pu·rad of energy left at "
+                 f"{self.decelerating:.2f}: {self.leftover:.2f} pu·rad of energy left at "
                  f"{self.delta_end_deg:.0f}°, so the machines lose step.")
+        else:
+            s = (f"Accelerating area {self.accelerating:.2f} pu·rad. After clearing the electrical "
+                 f"power never rose above the mechanical power, so there was no decelerating area: "
+                 f"the machines kept gaining energy ({self.leftover:.2f} pu·rad by "
+                 f"{self.delta_end_deg:.0f}°) and lose step.")
+        if self.small_swing:
+            s += f" The machines barely separated (less than {MIN_SEPARATION_DEG:g}°), so the areas are small."
         if self.later_swing_unstable:
             s += " The machines lost step in a later swing (the run stopped on the angle limit)."
         if self.multi_group:
@@ -142,16 +160,18 @@ def equal_area(result) -> EqualAreaResult:
     if t[-1] <= t2:
         return _not("the simulation ended before the fault was cleared")
     deg = np.degrees(tr.delta)
+    # Angles relative to their pre-fault values: the groups are formed by how far
+    # each machine SWUNG after the fault, not by where it sat before (the IEEE
+    # 39-bus case already has a large pre-fault gap between generators).
+    k0 = max(int(np.searchsorted(t, t1)) - 1, 0)
+    rel = deg - deg[k0]
 
-    after = t >= t1
-    k_peak = int(np.argmax(np.where(after, deg.max(1) - deg.min(1), -np.inf)))
-    C, N, multi, gap = _split(deg[k_peak])
-    if gap < MIN_SEPARATION_DEG and result.status == "completed":
-        # No real separation: use the machine that swings furthest from the rest.
-        dev = np.abs(deg[after] - deg[after].mean(1, keepdims=True)).max(0)
-        lead = int(np.argmax(dev))
-        C, N = np.array([lead]), np.array([i for i in range(n) if i != lead])
-        multi = False
+    # The split is taken at the largest spread of the FIRST swing (fault start to
+    # FIRST_SWING_S after clearing), not of a later, slower oscillation.
+    swing = (t >= t1) & (t <= t2 + FIRST_SWING_S)
+    k_peak = int(np.argmax(np.where(swing, rel.max(1) - rel.min(1), -np.inf)))
+    C, N, multi, gap = _split(rel[k_peak])
+    small = gap < MIN_SEPARATION_DEG
 
     M = tr.machine_m
     MC, MN = M[C].sum(), M[N].sum()
@@ -161,7 +181,6 @@ def equal_area(result) -> EqualAreaResult:
     pe = Mt * (tr.te[:, C].sum(1) / MC - tr.te[:, N].sum(1) / MN)
 
     # Orient so the first swing goes to larger angles.
-    k0 = int(np.searchsorted(t, t1)) - 1 if np.searchsorted(t, t1) > 0 else 0
     if d_eq[k_peak] < d_eq[k0]:
         C, N = N, C
         d_eq, pm, pe = -d_eq, -pm, -pe
@@ -186,6 +205,6 @@ def equal_area(result) -> EqualAreaResult:
         t=t[win], delta_deg=np.degrees(d_eq[win]), pm=pm[win], pe=pe[win],
         t_fault=float(t1), t_clear=float(t2), accelerating=acc, decelerating=dec,
         stable=stable, delta_end_deg=float(np.degrees(d_eq[k_end])), multi_group=multi,
-        later_swing_unstable=later,
+        later_swing_unstable=later, small_swing=bool(small),
         reason=("machines separate into more than two groups; the two-group picture is a "
                 "simplification") if multi else "")

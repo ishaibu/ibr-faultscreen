@@ -219,32 +219,45 @@ DEAD_BUS_S = 0.1
 DEAD_BUS_DELAY_S = 0.05
 
 
+def _clearing_samples(t, t_clear):
+    """Indices of the last sample before and the first sample after the clearing
+    instant. ANDES stores extra samples around a switching event (0.1 ms before,
+    at, and 0.1 ms after it), so strict inequalities pick values from either side."""
+    before = np.flatnonzero(t < t_clear - 1e-7)
+    after = np.flatnonzero(t > t_clear + 1e-7)
+    if not before.size or not after.size:
+        return None
+    return int(before[-1]), int(after[0])
+
+
 def _dead_bus(result):
     """(bus, seconds) of a non-physical stay at ~0 V after clearing, or None.
 
-    Two cases count: a bus held at ~0 V for at least DEAD_BUS_S, or a bus held
-    at ~0 V for the whole time from the settling delay until the run stopped
-    early. A run stopped on the angle limit can end before DEAD_BUS_S has
-    passed: in 2026-10, 107 of the 391 angle-unstable runs of the published
-    5,000-scenario dataset had a bus that snapped to exactly 0 V at the
-    clearing instant and stayed there (clearing a fault cannot do that), and
-    ANDES then reported them as angle instability. A brief dip to ~0 V only at
-    the end of a run (a real pole slip) is not flagged.
+    Two cases count:
+    1. a bus held at ~0 V for at least DEAD_BUS_S after the settling delay;
+    2. a run that stopped early (on the angle limit) before rule 1 could apply,
+       in which a bus is at ~0 V for the whole time from the settling delay to
+       the stop AND shows the artifact's signature: it is the faulted bus and
+       never rose above ~0 V after clearing (it must recover once the fault is
+       removed), or it snapped from a real voltage to ~0 V at the clearing
+       instant (clearing a fault cannot do that).
+    Rule 2 was added after 107 of the 391 angle-unstable runs of the
+    5,000-scenario dataset published with 0.1.0 turned out to be such
+    artifacts (2026-10). A bus that only decays toward zero as machines slip
+    apart (a real pole slip near the electrical center) is not flagged.
     """
     f, tr = result.scenario.fault, result.traj
     if f is None:
         return None
-    after = tr.t >= f.t_start + f.clear_time + DEAD_BUS_DELAY_S
+    t_clear = f.t_start + f.clear_time
+    after = tr.t >= t_clear + DEAD_BUS_DELAY_S
     if after.sum() < 2:
         return None
     t = tr.t[after]
     dead = np.abs(tr.v[after]) <= DEAD_BUS_PU
     dt = np.diff(t)
     worst = (None, 0.0)
-    whole = None
     for j in np.flatnonzero(dead.any(axis=0)):
-        if dead[:, j].all() and whole is None:
-            whole = (tr.bus_ids[j], float(t[-1] - t[0]))
         run = best = 0.0
         for d, step in zip(dead[:-1, j], dt):
             run = run + step if d else 0.0
@@ -253,7 +266,20 @@ def _dead_bus(result):
             worst = (tr.bus_ids[j], best)
     if worst[1] >= DEAD_BUS_S:
         return worst
-    return whole
+    stopped_early = tr.t[-1] < result.scenario.t_end - 1e-6
+    pair = _clearing_samples(tr.t, t_clear)
+    if not stopped_early or pair is None:
+        return None
+    k_before, k_after = pair
+    for j in np.flatnonzero(dead.all(axis=0)):
+        bus = tr.bus_ids[j]
+        v_before, v_after = abs(tr.v[k_before, j]), abs(tr.v[k_after, j])
+        snapped = v_before > 2 * DEAD_BUS_PU and v_after <= DEAD_BUS_PU
+        # the faulted bus counts only if it never rose above ~0 V after clearing
+        never_recovered = bus == f.bus and bool((np.abs(tr.v[k_after:, j]) <= DEAD_BUS_PU).all())
+        if never_recovered or snapped:
+            return bus, float(t[-1] - t[0])
+    return None
 
 
 def _check_physical(result):

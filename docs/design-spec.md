@@ -187,10 +187,15 @@ interconnection-study practice. **[To verify]** with users.
    re-simulating the 391 angle-unstable scenarios of the 5,000-scenario dataset
    (published with v0.1.0) showed 107 in which a bus (the faulted bus or
    another) snapped to exactly 0 V at the clearing instant and stayed there
-   while the rotor angles moved another 60–70°. Clearing a fault cannot do
+   while the rotor-angle spread grew another 39–91° (median 66°; in the 101 of
+   them that solve at the first step size). Clearing a fault cannot do
    that, so these are numerical. ANDES had reported them as angle instability
    because the run stopped before the 0.1 s rule could apply; finer steps
-   (1/120, 1/480 s) did not change them. In v0.2.0 they go through the
+   (1/120, 1/480 s) did not change them. The added rule requires the artifact's
+   signature: the bus is the faulted bus and never rose above ~0 V after
+   clearing (it must recover once the fault is removed) or it snapped from a real voltage to ~0 V at the clearing instant,
+   and the run stopped early. A bus that only decays toward zero as machines
+   slip apart (a real pole slip) is not flagged. In v0.2.0 they go through the
    milder-fault check like any unsolvable bolted fault: 82 became RISKY
    (confirmed) and 25 RISKY (unresolved), which are left out of training.
 
@@ -252,8 +257,10 @@ equal-area methods in the literature **[To verify: cite the exact references
 before using them in a paper]**:
 
 - Split the synchronous machines into a leading group C and the rest N at the
-  largest gap between rotor angles, at the moment of largest spread after the
-  fault starts (if no gap exceeds 10°, the machine that swings furthest leads).
+  largest gap between their angle CHANGES since the fault started (not their
+  absolute angles: the 39-bus case already has a large pre-fault gap), at the
+  moment of largest spread during the first swing (fault start to 1 s after
+  clearing). A gap under 10° is reported as a small swing.
 - δ = δ_C − δ_N (inertia-weighted group angles); M = M_C·M_N / (M_C + M_N);
   P_m = M·(ΣP_m,C/M_C − ΣP_m,N/M_N), and the same for P_e. Torques stand in for
   powers (speed near 1 pu), system base.
@@ -272,6 +279,13 @@ before using them in a paper]**:
   in a stable case.
 - It covers rotor-angle stability only. Voltage recovery, ride-through and
   frequency are separate checks.
+- IBRs have no rotor angle and are never in either group. They act through the
+  network: a converted machine's inertia, synchronizing power and mechanical
+  power leave the equivalent, and the IBR's current during and after the fault
+  shapes the machines' electrical power. **[Fact]** Example, bolted-like fault
+  (x = 0.001 pu) at bus 16 cleared in 0.20 s: no IBRs, accelerating area
+  6.42 pu·rad, swing stops at 108°; IBRs on generators 8 and 9, 7.28 pu·rad and
+  115° (worse); IBRs on generators 3 and 7, 4.20 pu·rad and 81° (better).
 
 ## 10. Dataset
 
@@ -283,8 +297,21 @@ before using them in a paper]**:
   resume after interruption (`progress.csv`). Timeouts and errors are labeled
   RISKY, never OK.
 - **Size:** 5,000 scenarios on the 39-bus system **[Assumption]**. With the
-  two-cycle step, 5,000 took 45 minutes on the author's laptop; the one-cycle
-  step and the extra retries make it slower.
+  two-cycle step, 5,000 took 45 minutes on the author's laptop; with the
+  one-cycle step and retries, 59 minutes (v0.1.0). v0.2.0 regenerated it with the
+  same seed: 111 outcomes changed (107 false collapses now caught, 3 whose
+  milder-fault rerun was also a false collapse, 1 former timeout). Another 16
+  rows kept their outcome but changed their reasons and milder-fault record
+  (their 0.001 pu rerun is now caught as a false collapse and the 0.003 pu rerun
+  confirms instead; one of them also lost its frequency flag); the other 4,873
+  rows are identical. SHA-256 `e1b871d0…a2fa16a7`.
+- **Explorer dataset (v0.2.0):** every set of 0–4 IBRs on generators 1–9 (256
+  sets) × fault buses 1–29 × clearing times 3, 5, 6, 9, 12 cycles, base load:
+  37,120 scenarios (`tools/explorer_scenarios.py`), 545 minutes on the author's
+  laptop. Outcomes: 24,079 OK, 6,690 RISKY, 2,564 RISKY (confirmed), 3,778 RISKY
+  (unresolved), 9 timeouts. Where a dataset scenario nearly matches an explorer
+  one (load within 1%, clearing time within 0.15 cycle; 45 cases) the labels
+  agree in 44; the other is on a boundary.
 - **Features (pre-fault only):** see `features.FEATURES`. SCR uses a
   short-circuit model built from the case (machines behind X'd, IBRs not
   contributing); it should be cross-checked against `scr-screen` **[To verify]**.

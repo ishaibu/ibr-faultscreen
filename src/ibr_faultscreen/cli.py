@@ -151,7 +151,7 @@ def cmd_cct(a):
         out.append({"fault_bus": bus, **r.summary(), "text": r.text()})
         print(f"bus {bus}: {r.text()}")
         if not a.no_equal_area and r.stable_s is not None:
-            _cct_equal_area(sc, r, a, bus)
+            _cct_equal_area(sc, r, a, bus, settings)
     if a.out:
         make_output_dir(Path(a.out).parent)
         _write_csv(a.out, out)
@@ -159,7 +159,7 @@ def cmd_cct(a):
     return 0
 
 
-def _cct_equal_area(sc, r, a, bus):
+def _cct_equal_area(sc, r, a, bus, settings):
     """Equal-area view just below and above the CCT (two more simulations)."""
     from dataclasses import replace
     from .equal_area import equal_area
@@ -168,7 +168,8 @@ def _cct_equal_area(sc, r, a, bus):
     for label_, ct in (("just stable", r.stable_s), ("just unstable", r.unstable_s)):
         if ct is None:
             continue
-        res = simulate(replace(sc, fault=replace(sc.fault, clear_time=ct), t_end=sc.fault.t_start + ct + 2.0))
+        res = simulate(replace(sc, fault=replace(sc.fault, clear_time=ct), t_end=sc.fault.t_start + ct + 2.0),
+                       stop_angle_deg=max(180.0, settings.angle_limit_deg))
         ea = equal_area(res)
         print(f"  equal-area view, {label_} ({ct * 1000:.0f} ms): {ea.text()}")
         runs.append(res if ea.applicable else None)

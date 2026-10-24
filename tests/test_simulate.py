@@ -97,14 +97,50 @@ def test_bus_held_at_zero_after_clearing_is_non_physical():
     assert r.status == "sim_fail" and "bus 1 held at 0 V" in r.message
 
 
-def test_bus_dead_until_an_early_stop_is_non_physical():
+def test_faulted_bus_dead_until_an_early_stop_is_non_physical():
     # A run stopped on the angle limit 0.1 s after clearing: shorter than the
-    # 0.1 s rule after the settling delay, but the bus never recovered.
+    # 0.1 s rule after the settling delay, but the faulted bus never recovered.
     def dead(t, V):
         V[t >= 1.0, 1] = 0.0                            # faulted bus, cleared at 1.1 s
     r = _fake(dead, t_end=1.2)
     assert r.status == "sim_fail"
     assert "bus 2 held at 0 V" in r.message and "until the run stopped" in r.message
+
+
+def test_faulted_bus_that_recovered_then_decayed_is_physical():
+    # The faulted bus recovers at clearing, then decays toward 0 V as machines
+    # slip apart (electrical center near the fault): a real pole slip.
+    import numpy as np
+
+    def recover_then_decay(t, V):
+        V[(t >= 1.0) & (t < 1.1), 1] = 0.0
+        late = t >= 1.1
+        V[late, 1] = np.maximum(0.004, 0.5 - 12.0 * (t[late] - 1.1))
+    r = _fake(recover_then_decay, t_end=1.2)
+    assert (abs(r.traj.v[r.traj.t >= 1.15, 1]) <= 0.01).all()
+    assert r.status == "completed"
+
+
+def test_bus_snapping_to_zero_at_clearing_is_non_physical():
+    # The artifact seen in the data: a healthy bus jumps to exactly 0 V at the
+    # clearing instant and stays there until the run stops.
+    def snap(t, V):
+        V[(t >= 1.0) & (t < 1.1), 0] = 0.2
+        V[t >= 1.1, 0] = 0.0
+    r = _fake(snap, t_end=1.2)
+    assert r.status == "sim_fail" and "bus 1 held at 0 V" in r.message
+
+
+def test_smooth_decay_before_an_early_stop_is_physical():
+    # A real pole slip: a bus near the electrical center decays toward 0 V as
+    # the machines slip apart; it did not snap at clearing. Not flagged.
+    import numpy as np
+
+    def decay(t, V):        # 0.3 pu right after clearing, below 0.01 pu from 1.15 s to the stop
+        V[:, 0] = np.where(t < 1.1, 1.0, np.maximum(0.004, 0.3 - 6.5 * (t - 1.1)))
+    r = _fake(decay, t_end=1.19)
+    assert (abs(r.traj.v[r.traj.t >= 1.15, 0]) <= 0.01).all()      # the old rule flagged this
+    assert r.status == "completed"
 
 
 def test_brief_dip_at_the_end_of_a_run_is_physical():

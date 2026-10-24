@@ -7,7 +7,7 @@ authors:
     given-names: Shaibu
     orcid: "https://orcid.org/0009-0009-5942-9702"
 version: 0.2.0
-date-released: "2026-10-11"
+date-released: "2026-10-24"
 doi: 10.5281/zenodo.23290219
 identifiers:
   - type: doi
@@ -15,7 +15,7 @@ identifiers:
     description: "Software, all versions (Zenodo)"
   - type: doi
     value: 10.5281/zenodo.23290449
-    description: "Dataset: 5,000 simulated fault scenarios on the IEEE 39-bus system (Zenodo)"
+    description: "Datasets: 5,000 sampled and 37,120 exhaustive fault scenarios on the IEEE 39-bus system (Zenodo, all versions)"
 license: GPL-3.0-or-later
 repository-code: "https://github.com/ishaibu/ibr-faultscreen"
 keywords:

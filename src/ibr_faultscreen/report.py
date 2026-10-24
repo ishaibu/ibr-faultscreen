@@ -1021,6 +1021,7 @@ _JS = r"""
       esc(e.text) + '<br><span class="muted">Leading group: ' + esc(e.lead.join(', ')) + ' · against: ' + esc(e.others.join(', ')) +
       '. Orange area: energy the leading machines gain while the fault is on. Blue area: energy given back after clearing. ' +
       'The swing stops when the blue area equals the orange one; if it cannot, the machines lose step. ' +
+      'IBRs have no rotor, so they are not machines in this view: they act through the network, by removing the inertia and synchronizing power of the machines they replace and by the current they inject during and after the fault, which shapes the electrical power curve. ' +
       'This view covers rotor-angle stability only, from the simulated trajectories (no extrapolation).</span>', wrap);
     return {e: e, clip: clip, X: X, Y: Y, l: m.l, pw: pw, mk: mk, reach: cummax(e.d)};
   }

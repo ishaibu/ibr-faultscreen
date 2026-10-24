@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SUFFIXES = {".py", ".md", ".yaml", ".yml", ".toml", ".cff", ".ipynb", ".txt", ".cfg",
-            ".ini", ".json", ".csv", ".html"}
+            ".ini", ".json", ".csv", ".html", ".js"}
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "build", "dist", ".pytest_cache"}
 # letter + digit labels such as task "week-step", decision and test numbers
 PATTERNS = [
@@ -35,8 +35,9 @@ def _tracked(root):
     """Files tracked by Git (None if Git is not available)."""
     import subprocess
     try:
-        out = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True,
-                             check=True).stdout
+        # tracked files plus new files not yet committed (but not ignored ones)
+        out = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+                             cwd=root, capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return None
     files = [root / f for f in out.splitlines() if f]

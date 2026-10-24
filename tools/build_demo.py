@@ -1,8 +1,10 @@
 """Build the interactive demo report published on GitHub Pages (docs/demo/index.html).
 
-Run from the project folder, after generating a dataset:
+Run from the project folder, after generating a dataset (and, for the
+"Build your own grid" explorer and the quiz, after tools/explorer_data.py has
+written docs/demo/explorer-data.js):
 
-    python tools/build_demo.py dataset_v2/dataset.csv
+    python tools/build_demo.py dataset_v3/dataset.csv
 
 It uses every scenario in the dataset for the summary, network map, ranked table
 and risk-versus-IBR-share chart; trains the screening model to include its model
@@ -16,11 +18,13 @@ import argparse
 import csv
 import logging
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
 
-DOI_LINKS = ('<br>Dataset: <a href="https://doi.org/10.5281/zenodo.23290449">doi.org/10.5281/zenodo.23290449</a> · Software: <a href="https://doi.org/10.5281/zenodo.23290219">doi.org/10.5281/zenodo.23290219</a>')
+DOI_LINKS = ('<br>Dataset (version 2.0 with this demo; the link opens the latest): <a href="https://doi.org/10.5281/zenodo.23290449">doi.org/10.5281/zenodo.23290449</a> · Software: <a href="https://doi.org/10.5281/zenodo.23290219">doi.org/10.5281/zenodo.23290219</a>')
 
 # One representative scenario per outcome: (label shown in the log, row filter)
 PICKS = [
@@ -98,6 +102,14 @@ def main(argv=None):
                                "parameters and illustrative angle, recovery and frequency "
                                "limits. Not a real system."))
     html = out.read_text(encoding="utf-8")
+    from demo_explorer import inject
+    from ibr_faultscreen.case import read_case
+    from ibr_faultscreen.report import network_layout
+    layout, edges, _ = network_layout(read_case("ieee39"), "ieee39")
+    html = inject(html, layout, edges)
+    if not (out.parent / "explorer-data.js").exists():
+        print("Note: explorer-data.js not found next to the page; the explorer and quiz stay hidden "
+              "until tools/explorer_data.py writes it.")
     html = re.sub(r"(<div class=\"ver\">IBR-FaultScreen v[^<]*<br>)[^<]*", r"\1demo", html)
     html = html.replace("Not a real system.</p>", "Not a real system." + DOI_LINKS + "</p>", 1)
     out.write_text(html, encoding="utf-8")
