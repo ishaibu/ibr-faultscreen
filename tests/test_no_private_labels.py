@@ -21,7 +21,13 @@ PATTERNS = [
     re.compile(r"\bT\d{1,2}\b"),                # test labels
     re.compile(r"\btest_t\d+_|_t\d+\b"),        # the same, inside Python names
     re.compile(r"build[ -]plan", re.I),
+    re.compile(r"\bweek \d", re.I),               # schedule references
+    re.compile(r"\bshai_\w+"),                    # maintainer-only columns
 ]
+
+#: Maintainer working notes: kept privately, never published.
+PRIVATE_FILES = ("docs/owners-guide.md", "docs/review-guide.md",
+                 "examples/run_review.py", "examples/review_scenarios.yaml")
 
 
 def _generated(rel):
@@ -69,6 +75,15 @@ def find_labels(root=ROOT):
 def test_no_private_labels():
     hits = find_labels()
     assert not hits, "Internal planning labels found:\n" + "\n".join(hits)
+
+
+def private_files_present(root=ROOT):
+    return [f for f in PRIVATE_FILES if (root / f).exists()]
+
+
+def test_no_maintainer_notes():
+    found = private_files_present()
+    assert not found, "Maintainer-only files in the repository (keep them privately): " + ", ".join(found)
 
 
 def test_scanner_catches_labels(tmp_path):

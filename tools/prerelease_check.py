@@ -72,6 +72,8 @@ hits = labels.find_labels(ROOT)
 if hits:
     problems.append("internal planning labels found:\n      " + "\n      ".join(hits[:20]))
 notes.append(f"internal planning labels: {len(hits)}")
+for f in labels.private_files_present(ROOT):
+    problems.append(f"maintainer-only file in the repository (keep it privately): {f}")
 
 print("\n".join("  " + n for n in notes))
 if problems:

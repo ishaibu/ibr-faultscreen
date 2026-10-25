@@ -440,11 +440,11 @@ ibr-faultscreen report results.csv [--open]
    15 solver failures, 17 RISKY (all failures unresolved). Where both profiles
    solved (13 scenarios), the labels agreed 13 of 13 (run time 1.3 min vs.
    9.1 min with two workers). On 8 targeted cases the WECC profile removed the
-   post-fault overvoltage in review case R13 but failed more often; its reactive
+   post-fault overvoltage at an IBR bus (generator 6, bus 6 at 1.08 pu before
+   the fault) but failed more often; its reactive
    current during faults was lower (about 0.5 of the limit vs. 0.7). Both
    profiles are illustrative. The example parameters keep reactive current high
-   after clearing, giving post-fault overvoltage of 1.1–1.2 pu at IBR buses
-   (review cases R13, R15). Charging BESS in a later version.
+   after clearing, giving post-fault overvoltage of 1.1–1.2 pu at IBR buses. Charging BESS in a later version.
 2. Solver robustness (milder-fault check implemented). Report the reproducible
    cases to the ANDES developers. With bolted faults (1e-4 pu), ANDES 2.0.0
    failed for faults at the high-side bus of IBRs on generators 4, 5 and 9, and

@@ -2,6 +2,14 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Colab notebook: the clearing-time sweep shows the tool's verdicts without the
+  solver's own log messages.
+- Documentation: maintainer working notes removed from the repository;
+  `examples/README.md` lists the examples.
+
 ## [0.2.0] - 2026-10-24
 
 ### Added

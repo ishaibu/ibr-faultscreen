@@ -233,9 +233,7 @@ explained in `docs/glossary.md`.
 ## Documents
 
 - `docs/design-spec.md`: scope, decisions, methods, tests, limitations
-- `docs/review-guide.md`: how to review scenario figures
 - `docs/verification.md`: independent hand checks
-- `docs/owners-guide.md`: how it works, FAQ, supporting users
 - `docs/glossary.md`: abbreviations and terms
 - `CHANGELOG.md`: what changed in each version
 - `examples/colab_quickstart.ipynb`: run in the browser with Google Colab
