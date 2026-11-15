@@ -2,8 +2,8 @@
 
 [![tests](https://github.com/ishaibu/ibr-faultscreen/actions/workflows/tests.yml/badge.svg)](https://github.com/ishaibu/ibr-faultscreen/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/ibr-faultscreen?cacheSeconds=3600)](https://pypi.org/project/ibr-faultscreen/)
-![Python](https://img.shields.io/badge/python-3.11%2B-blue)
-![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-green)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://pypi.org/project/ibr-faultscreen/)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-green)](https://github.com/ishaibu/ibr-faultscreen/blob/main/LICENSE)
 [![Interactive demo](https://img.shields.io/badge/demo-open%20in%20browser-0a9396)](https://ishaibu.github.io/ibr-faultscreen/demo/)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ishaibu/ibr-faultscreen/blob/main/examples/colab_quickstart.ipynb)
 [![Software DOI](https://img.shields.io/badge/software%20DOI-10.5281%2Fzenodo.23290219-blue)](https://doi.org/10.5281/zenodo.23290219)
