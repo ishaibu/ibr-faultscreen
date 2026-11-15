@@ -1,4 +1,6 @@
-"""Build the interactive demo report published on GitHub Pages (docs/demo/index.html).
+"""Build the interactive demo published on GitHub Pages: the dashboard
+(docs/demo/index.html, with the explorer and quiz) and the report
+(docs/demo/report/index.html).
 
 Run from the project folder, after generating a dataset (and, for the
 "Build your own grid" explorer and the quiz, after tools/explorer_data.py has
@@ -6,10 +8,10 @@ written docs/demo/explorer-data.js):
 
     python tools/build_demo.py dataset_v3/dataset.csv
 
-It uses every scenario in the dataset for the summary, network map, ranked table
-and risk-versus-IBR-share chart; trains the screening model to include its model
-card; and re-simulates one representative scenario per outcome for the
-interactive trajectories. Takes a few minutes.
+It uses every scenario in the dataset for the summary, network map, tables and
+charts; trains the screening model to include its evaluation and model card; and
+re-simulates one representative scenario per outcome for the interactive
+trajectories. Takes a few minutes.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-DOI_LINKS = ('<br>Dataset (version 2.0 with this demo; the link opens the latest): <a href="https://doi.org/10.5281/zenodo.23290449">doi.org/10.5281/zenodo.23290449</a> · Software: <a href="https://doi.org/10.5281/zenodo.23290219">doi.org/10.5281/zenodo.23290219</a>')
+DOI_LINKS = ('Dataset (version 2.0 with this demo; the link opens the latest): <a href="https://doi.org/10.5281/zenodo.23290449">doi.org/10.5281/zenodo.23290449</a> · Software: <a href="https://doi.org/10.5281/zenodo.23290219">doi.org/10.5281/zenodo.23290219</a>')
 
 # One representative scenario per outcome: (label shown in the log, row filter)
 PICKS = [
@@ -95,25 +97,45 @@ def main(argv=None):
     card = write_model_card(bundle, out.with_name("model-card.md")).read_text(encoding="utf-8")
     out.with_name("model-card.md").unlink()
 
-    build_report(rows, out, title=f"IBR-FaultScreen demo: IEEE 39-bus, {n:,} fault scenarios",
-                 case="ieee39", criteria_source="built-in PRC-029-1 file (illustrative "
-                 "non-standard limits)", model_card_md=card, traces=traces,
-                 dataset_note=("Demo on the IEEE 39-bus test system with generic IBR "
-                               "parameters and illustrative angle, recovery and frequency "
-                               "limits. Not a real system."))
-    html = out.read_text(encoding="utf-8")
-    from demo_explorer import inject
+    title = f"IBR-FaultScreen demo: IEEE 39-bus, {n:,} fault scenarios"
+    crit = ("built-in PRC-029 file (PRC-029-1 and -2 tables; illustrative non-standard angle, "
+            "voltage-recovery and frequency limits)")
+    note = ("Demo on the IEEE 39-bus test system with generic IBR parameters and illustrative "
+            "angle, recovery and frequency limits. Not a real system.")
+
+    # The report: the printable document, one folder down.
+    rep_out = out.parent / "report" / "index.html"
+    rep_out.parent.mkdir(parents=True, exist_ok=True)
+    build_report(rows, rep_out, title=title, case="ieee39", criteria_source=crit,
+                 model_card_md=card, traces=traces, dataset_note=note)
+    html = rep_out.read_text(encoding="utf-8")
+    html = re.sub(r"(<div class=\"ver\">IBR-FaultScreen v[^<]*<br>)[^<]*", r"\1demo", html)
+    html = html.replace("Not a real system.</p>", "Not a real system.<br>" + DOI_LINKS + "</p>", 1)
+    rep_out.write_text(html, encoding="utf-8")
+    print(f"Report: {rep_out} ({rep_out.stat().st_size / 1e6:.1f} MB)")
+
+    # The dashboard, with the explorer and quiz.
+    from demo_explorer import dashboard_parts
     from ibr_faultscreen.case import read_case
+    from ibr_faultscreen.dashboard import build_dashboard
     from ibr_faultscreen.report import network_layout
     layout, edges, _ = network_layout(read_case("ieee39"), "ieee39")
-    html = inject(html, layout, edges)
+    head, explorer, body = dashboard_parts(layout, edges)
     if not (out.parent / "explorer-data.js").exists():
         print("Note: explorer-data.js not found next to the page; the explorer and quiz stay hidden "
               "until tools/explorer_data.py writes it.")
-    html = re.sub(r"(<div class=\"ver\">IBR-FaultScreen v[^<]*<br>)[^<]*", r"\1demo", html)
-    html = html.replace("Not a real system.</p>", "Not a real system." + DOI_LINKS + "</p>", 1)
-    out.write_text(html, encoding="utf-8")
-    print(f"Demo: {out} ({out.stat().st_size / 1e6:.1f} MB)")
+    build_dashboard(rows, out, title=title, case="ieee39", criteria_source=crit,
+                    model_eval=rep, model_card_md=card, traces=traces, dataset_note=note + " " + DOI_LINKS,
+                    counting=settings.ride_through_counting, extra_head=head,
+                    explorer_html=explorer, extra_body=body,
+                    overview_note=(f"Counts on this page: {n:,} randomly sampled fault scenarios. "
+                                   "Explorer &amp; quiz uses a second, exhaustive set of 37,120 runs "
+                                   "(256 IBR sets × 29 fault buses × 5 clearing times, base load). "
+                                   "Both datasets: <a href=\"https://doi.org/10.5281/zenodo.23290449\">"
+                                   "doi.org/10.5281/zenodo.23290449</a>"),
+                    subtitle=("Interactive demo · ieee39 · " + f"{n:,} scenarios · "
+                              '<a href="report/index.html">printable report</a>'))
+    print(f"Dashboard: {out} ({out.stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":

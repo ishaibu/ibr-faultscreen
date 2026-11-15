@@ -38,8 +38,12 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (average_precision_score, brier_score_loss, confusion_matrix,
-                             roc_auc_score)
+from sklearn.metrics import (
+    average_precision_score,
+    brier_score_loss,
+    confusion_matrix,
+    roc_auc_score,
+)
 from sklearn.model_selection import GroupKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -98,7 +102,7 @@ def solver_failure_rates(path_or_df) -> dict:
     unk = _unknown_mask(df)
     out = {}
     for bus, grp in df.groupby(df["fault_bus"].astype(int)):
-        n, u = int(len(grp)), int(unk[grp.index].sum())
+        n, u = len(grp), int(unk[grp.index].sum())
         out[int(bus)] = {"n": n, "unknown": u, "rate": u / n if n else 0.0}
     return out
 
@@ -154,6 +158,7 @@ def make_model(name, seed=0):
         # the grouped, nested AUC from 0.850 to 0.882 and AP from 0.656 to 0.742
         # (depth 3 had suited the 240-scenario demo set). Chosen on the same grouped
         # folds that report the result, so treat the gain as slightly optimistic.
+        # (On the dataset regenerated with v0.2.0 the grouped AUC is 0.86.)
         return HistGradientBoostingClassifier(class_weight="balanced", random_state=seed,
                                               max_iter=300, learning_rate=0.05,
                                               min_samples_leaf=40, max_depth=None,
@@ -273,8 +278,8 @@ def evaluate_models(df, recall_target=DEFAULT_RECALL_TARGET, n_splits=5, seed=0,
             t = threshold_for_recall(inner, y[tr], recall_target)
             pt = _fit(name, X[tr], y[tr], recall_target, seed).predict_proba(X[te])[:, 1]
             extra["models"][name] = _metrics(y[te], pt, t)
-    return {"n": int(len(y)), "n_risky": int(y.sum()), "n_fault_buses": int(len(np.unique(groups))),
-            "n_unknown_scored": int(len(unknown)) if has_unk else 0,
+    return {"n": len(y), "n_risky": int(y.sum()), "n_fault_buses": len(np.unique(groups)),
+            "n_unknown_scored": len(unknown) if has_unk else 0,
             "recall_target": recall_target, "split": f"GroupKFold by fault bus, {k} folds (nested)",
             "models": results, "extrapolation": extra}
 
@@ -356,7 +361,7 @@ def train_final(df, name="gbm", recall_target=DEFAULT_RECALL_TARGET, n_splits=5,
     import sklearn
 
     import ibr_faultscreen
-    meta = {"recall_target": recall_target, "n": int(len(y)), "n_risky": int(y.sum()),
+    meta = {"recall_target": recall_target, "n": len(y), "n_risky": int(y.sum()),
             "n_unknown": df.attrs.get("n_unknown"),
             "dataset_sha256": dataset_sha, "sklearn": sklearn.__version__,
             "ibr_faultscreen": ibr_faultscreen.__version__, "seed": seed,

@@ -120,3 +120,22 @@ def test_every_generator_initializes_as_an_ibr(profile):
         system.TDS.config.no_tqdm = 1
         system.TDS.init()
         assert system.TDS.test_ok is not False, f"generator {gen} failed to initialize"
+
+
+def test_slack_rejected_before_anything_changes():
+    sheets = read_case()
+    before = {k: len(v) for k, v in sheets.items()}
+    with pytest.raises(ValueError, match="slack"):
+        convert_to_ibr(sheets, IBRSpec(10))
+    assert {k: len(v) for k, v in sheets.items()} == before
+
+
+def test_step_up_transformer_found_or_falls_back_to_own_bus():
+    from ibr_faultscreen.case import step_up_transformer
+    sheets = read_case()
+    _idx, hv, n = step_up_transformer(sheets, 31)            # gen 2: 31 -> 6
+    assert (hv, n) == (6, 1)
+    lines = sheets["Line"]
+    lines.loc[(lines["bus1"] == 31) | (lines["bus2"] == 31), "trans"] = 0
+    _idx, hv, n = step_up_transformer(sheets, 31)            # no transformer: own bus
+    assert (hv, n) == (31, 0)

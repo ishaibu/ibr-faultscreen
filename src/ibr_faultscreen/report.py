@@ -286,7 +286,8 @@ def _table(rows, cols, cls="risk", limit=None, linked=()):
             sv = _sort_value(k, v)
             attrs = f'class="c-{k}" data-label="{_e(c)}" data-v="{_e(sv)}"'
             if k == "verdict":
-                tone = "bad" if str(v).startswith("RISKY") else ("warn" if "predicted" in str(v)
+                tone = "bad" if str(v).startswith("RISKY") else ("warn" if ("predicted" in str(v)
+                                                                 or "not yet verified" in str(v))
                                                                  else "good")
                 cell = f'<span class="pill {tone}">{_e(v)}</span>'
             elif k == "scenario_id":
@@ -460,9 +461,10 @@ def build_report(rows, out_path, *, title="IBR-FaultScreen report", case="ieee39
     for r in rows:
         if r.get("fault_bus") not in (None, ""):
             bus_risk.setdefault(r["fault_bus"], []).append(r["risky"])
-    worst_buses = sorted(((b, sum(v) / len(v), len(v)) for b, v in bus_risk.items() if len(v) >= 2),
-                         key=lambda t: -t[1])[:3]
-    worst_txt = ", ".join(f"bus {b} ({s * 100:.0f}% of {c})" for b, s, c in worst_buses) or "n/a"
+    worst_buses = sorted(((b, sum(v) / len(v), len(v)) for b, v in bus_risk.items() if sum(v) > 0),
+                         key=lambda t: (-t[1], -t[2], t[0]))[:3]
+    worst_txt = (", ".join(f"bus {b} ({round(s * c)} of {c} RISKY)" for b, s, c in worst_buses)
+                 or "none (no RISKY scenario)")
 
     cols = [("Scenario", "scenario_id"), ("Verdict", "verdict"), ("Source", "source")]
     if has_p:
@@ -1116,8 +1118,13 @@ _JS = r"""
     if ('IntersectionObserver' in window && !reduce) {
       views.forEach(function (v) { v.clip.setAttribute('width', 0); });
       if (eacView) eacView.clip.setAttribute('width', 0);
-      var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { io.disconnect(); animate(); } }, {threshold: 0.25});
+      var played = false;
+      var playOnce = function () { if (!played) { played = true; io.disconnect(); animate(); } };
+      var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) playOnce(); }, {threshold: 0.05});
       io.observe(sec);
+      // Some embedded viewers (for example notebook output frames) never report the
+      // section as visible: draw it anyway after a few seconds, so it is never blank.
+      setTimeout(playOnce, 4000);
     }
   }
 })();

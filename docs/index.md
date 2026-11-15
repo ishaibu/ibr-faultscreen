@@ -6,9 +6,10 @@ Fault-scenario screening for grids with inverter-based resources (solar, wind, b
 
 - **[Build your own grid](demo/#explore)**: pick IBRs, fault bus and clearing time; all 37,120
   combinations simulated in advance. Then try the **[quiz](demo/#quiz)**.
-- **[Interactive demo report](demo/)**: 5,000 simulated faults on the IEEE 39-bus system
-  (generic IBR models, illustrative limits). Press Play on the map, sort the table, replay the
-  trajectories, with the equal-area view.
+- **[Interactive dashboard](demo/)**: 5,000 simulated faults on the IEEE 39-bus system
+  (generic IBR models, illustrative limits). Filter, zoom the map, look up any bus or scenario,
+  see ride-through exposure by band, replay the trajectories with the equal-area view. The
+  **[printable report](demo/report/)** has the same results as one document.
 - **[Run real simulations in Google Colab](https://colab.research.google.com/github/ishaibu/ibr-faultscreen/blob/main/examples/colab_quickstart.ipynb)**: free, nothing to install.
 - **[Design specification](design-spec)**, **[verification record](verification)** and
   **[glossary](glossary)**

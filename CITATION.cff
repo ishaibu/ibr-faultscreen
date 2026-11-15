@@ -6,8 +6,8 @@ authors:
   - family-names: Ibrahim
     given-names: Shaibu
     orcid: "https://orcid.org/0009-0009-5942-9702"
-version: 0.2.0
-date-released: "2026-10-24"
+version: 0.3.0
+date-released: "2026-11-15"
 doi: 10.5281/zenodo.23290219
 identifiers:
   - type: doi
@@ -30,6 +30,6 @@ abstract: >-
   IBR-FaultScreen simulates three-phase fault scenarios on power systems with
   inverter-based resources (solar, wind, battery storage) using ANDES, labels each
   scenario by failure mode (rotor-angle instability, slow voltage recovery, NERC
-  PRC-029-1 ride-through exposure, frequency), and trains a screening classifier
+  PRC-029 ride-through exposure, frequency), and trains a screening classifier
   that ranks new scenarios for detailed study, verifying every risky result by
   simulation. It is a screening aid and does not replace an interconnection study.

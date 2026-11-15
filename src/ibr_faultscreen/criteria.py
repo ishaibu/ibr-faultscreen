@@ -4,9 +4,11 @@ All functions are pure: they take time series (NumPy arrays) and thresholds,
 and return a CriterionResult. No ANDES objects are used here, so every rule
 can be hand-checked with synthetic data (ride-through boundary tests).
 
-Thresholds come from the user. Apart from the rotor-angle limit (a common
-screening heuristic), IBR-FaultScreen ships no default limits: a criterion
-whose limits are not set is reported as "not evaluated" rather than guessed.
+Thresholds come from a criteria file. The built-in file
+(data/criteria_prc029.yaml) holds the NERC PRC-029 ride-through tables and
+illustrative angle, voltage-recovery and frequency limits; replace them with
+your organization's criteria. In code, a criterion whose limits are not set is
+reported as "not evaluated" rather than guessed.
 """
 
 from __future__ import annotations
@@ -36,6 +38,22 @@ class CriterionResult:
     value: float | None = None
     limit: float | None = None
     detail: str = ""
+    #: Ride-through only: the largest share of an allowed time used in any band
+    #: (time spent / minimum ride-through time). Above 1 = exposure; 0.8 to 1 =
+    #: near miss; inf = time spent in a band where tripping is permitted at once.
+    ratio: float | None = None
+
+
+#: Ride-through ratios from this value up to 1 count as a near miss.
+NEAR_MISS_RATIO = 0.8
+
+#: How time is counted against the ride-through tables:
+#: "per_band"  time at a value counts only toward the band that contains it
+#:             (PRC-029-1 Attachment 1 note 7 read band by band; default);
+#: "nested"    time counts toward every band at or beyond that value, for
+#:             example time at 0.6 pu counts toward the 0.70-0.90 band as well
+#:             (the more conservative reading of the same note).
+RT_COUNTING = ("per_band", "nested")
 
 
 def _as_2d(x):
@@ -274,6 +292,27 @@ class Envelope:
                 raise ValueError(f"envelope {self.name!r}: bands overlap at {c.low}")
 
 
+def _nested_masks(bands, x):
+    """Masks for the 'nested' reading: a band below the continuous region counts
+    every value below its upper edge; a band above it, every value above its
+    lower edge. Without a continuous band the masks are the bands themselves."""
+    cont = [b for b in bands if math.isinf(b.min_s)]
+    if not cont:
+        return [b.contains(x) for b in bands]
+    lo_c, hi_c = min(b.low for b in cont), max(b.high for b in cont)
+    out = []
+    for b in bands:
+        if math.isinf(b.min_s):
+            out.append(b.contains(x))
+        elif b.high <= lo_c:
+            out.append(x <= b.high if b.high_closed else x < b.high)
+        elif b.low >= hi_c:
+            out.append(x >= b.low if b.low_closed else x > b.low)
+        else:
+            out.append(b.contains(x))
+    return out
+
+
 def _time_in(t, mask, method, window_s=None):
     """Seconds spent where mask is True. Each interval [t_i, t_i+1) takes the state at t_i.
 
@@ -299,7 +338,7 @@ def _time_in(t, mask, method, window_s=None):
 
 
 def ride_through_exposure(t, x, envelope: Envelope, label: str = "",
-                          ignore=None) -> CriterionResult:
+                          ignore=None, counting: str = "per_band") -> CriterionResult:
     """Compare one IBR's trajectory `x` with a ride-through envelope.
 
     passed = True  : the trajectory stayed inside the must-ride-through region
@@ -309,28 +348,48 @@ def ride_through_exposure(t, x, envelope: Envelope, label: str = "",
                      a loss-of-IBR risk. Equal to the minimum counts as inside.
     Values outside every band are reported as uncovered (passed = None).
     `ignore` = (start, end): time in this interval is not counted.
+    `counting`: "per_band" or "nested" (see RT_COUNTING).
+    The result's `ratio` is the largest time-spent / time-allowed over the bands.
     """
+    if counting not in RT_COUNTING:
+        raise ValueError(f"ride-through counting must be one of {RT_COUNTING}")
     t = _check_time(t, x)
     x = np.asarray(x, dtype=float).ravel()
     keep = _valid(t, ignore)
     covered = np.zeros(x.size, dtype=bool)
     how = envelope.method + (f" over {envelope.window_s:g} s" if envelope.window_s else "")
-    for band in sorted(envelope.bands, key=lambda b: b.low):
-        mask = band.contains(x) & keep
-        covered |= mask
-        spent = _time_in(t, mask, envelope.method, envelope.window_s)
-        if spent > band.min_s + TIME_TOL_S:
-            return CriterionResult(
-                f"ride_through:{envelope.name}", False, spent, band.min_s,
-                f"{label} {envelope.quantity} in {band.label()} for {spent:.3f} s "
-                f"> {band.min_s:g} s ({how}); source: {envelope.source}".strip())
+    if counting == "nested":
+        how += ", nested counting"
+    bands = sorted(envelope.bands, key=lambda b: b.low)
+    masks = _nested_masks(bands, x) if counting == "nested" else [b.contains(x) for b in bands]
+    first_fail, worst = None, 0.0
+    for band, inband in zip(bands, masks):
+        covered |= band.contains(x) & keep
+        spent = _time_in(t, inband & keep, envelope.method, envelope.window_s)
+        if math.isinf(band.min_s):
+            ratio = 0.0
+        elif band.min_s > 0:
+            ratio = spent / band.min_s
+        else:
+            ratio = math.inf if spent > TIME_TOL_S else 0.0
+        worst = max(worst, ratio)
+        if first_fail is None and spent > band.min_s + TIME_TOL_S:
+            first_fail = (band, spent)
+    name = f"ride_through:{envelope.name}"
+    if first_fail is not None:
+        band, spent = first_fail
+        return CriterionResult(
+            name, False, spent, band.min_s,
+            f"{label} {envelope.quantity} in {band.label()} for {spent:.3f} s "
+            f"> {band.min_s:g} s ({how}); source: {envelope.source}".strip(), ratio=worst)
     if not (covered | ~keep)[:-1].all():
-        return CriterionResult(f"ride_through:{envelope.name}", None,
+        return CriterionResult(name, None,
                                detail=f"{label} trajectory leaves every band of the envelope; "
-                                      "check the envelope covers the full range".strip())
-    return CriterionResult(f"ride_through:{envelope.name}", True,
+                                      "check the envelope covers the full range".strip(),
+                               ratio=worst)
+    return CriterionResult(name, True,
                            detail=f"{label} inside must-ride-through region; "
-                                  f"source: {envelope.source}".strip())
+                                  f"source: {envelope.source}".strip(), ratio=worst)
 
 
 # ---------------------------------------------------------------- settings
@@ -353,6 +412,12 @@ class CriteriaSettings:
     #: excludes the fault period from RoCoF.]
     freq_window_s: float = 0.1
     envelopes: tuple[Envelope, ...] = field(default_factory=tuple)
+    #: How time is counted against the ride-through tables (see RT_COUNTING).
+    ride_through_counting: str = "per_band"
+
+    def __post_init__(self):
+        if self.ride_through_counting not in RT_COUNTING:
+            raise ValueError(f"ride_through_counting must be one of {RT_COUNTING}")
 
 
 def _envelope_from_dict(d):
@@ -369,18 +434,22 @@ def _envelope_from_dict(d):
 def load_criteria(path: str | Path) -> CriteriaSettings:
     """Read CriteriaSettings from a YAML file (see examples/criteria_example.yaml)."""
     d = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    text_keys = {"ride_through_counting"}
     known = {k for k in CriteriaSettings.__dataclass_fields__} - {"envelopes"}
     unknown = set(d) - known - {"envelopes"}
     if unknown:
         raise ValueError(f"unknown criteria settings: {sorted(unknown)}")
-    values = {k: (None if d.get(k) is None else float(d[k])) for k in known if k in d}
+    values = {k: (None if d.get(k) is None else float(d[k])) for k in known - text_keys if k in d}
+    for k in text_keys:
+        if d.get(k) is not None:
+            values[k] = str(d[k]).strip().lower().replace("-", "_")
     if "freq_window_s" in values and values["freq_window_s"] is None:
         values.pop("freq_window_s")
     envs = tuple(_envelope_from_dict(e) for e in d.get("envelopes") or [])
     return CriteriaSettings(**values, envelopes=envs)
 
 
-#: The PRC-029-1 criteria file shipped with the package (transcribed tables;
+#: The PRC-029 criteria file shipped with the package (transcribed tables;
 #: illustrative angle, voltage-recovery and frequency limits).
 def default_criteria_path():
     from importlib.resources import files

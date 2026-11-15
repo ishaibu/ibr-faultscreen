@@ -52,6 +52,13 @@ def test_budget_never_turns_prediction_into_risky_verdict():
     assert rows[0].verdict == "predicted RISKY, not yet verified" and all_risky_verified(rows)
 
 
+def test_borderline_without_budget_is_not_called_ok():
+    cands = [Scenario("mid", fault=FaultSpec(16, clear_time=0.18), t_end=3)]     # p = 0.43
+    rows = screen(cands, bundle(), default_criteria(), borderline=0.15, max_verify=0)
+    assert rows[0].verdict.startswith("needs simulation") and "not yet verified" in rows[0].verdict
+    assert rows[0].summary()["rt_ratio_max"] == ""                             # not simulated
+
+
 def test_screen_always_verifies_solver_hard_buses():
     b = bundle()
     b.meta = {"solver_rates": {16: {"n": 10, "unknown": 5, "rate": 0.5},

@@ -40,6 +40,14 @@ def test_confirmed_when_milder_fault_is_risky():
     lab = label(r, CRIT)
     assert lab.risky and lab.resolution == "confirmed"
     assert any("bolted run failed" in x for x in lab.reasons)
+    # failure modes come from the milder fault, so counts by mode include this scenario
+    assert lab.flags["sim_fail"] is True
+    for k in ("angle_unstable", "voltage_recovery_fail", "ride_through_exposure",
+              "frequency_violation"):
+        assert lab.flags[k] == lab.diagnostic.flags[k]
+    assert any(lab.flags[k] for k in ("angle_unstable", "voltage_recovery_fail",
+                                      "ride_through_exposure", "frequency_violation"))
+    assert lab.rt_ratio == lab.diagnostic.rt_ratio
 
 
 def test_solved_bolted_fault_has_no_diagnostics():

@@ -2,6 +2,8 @@
 
 import math
 
+import pytest
+
 from ibr_faultscreen.features import FEATURES, compute_features, short_circuit_z
 from ibr_faultscreen.case import read_case
 from ibr_faultscreen.scenario import FaultSpec, IBRSpec, Scenario
@@ -35,3 +37,25 @@ def test_short_circuit_matrix_is_symmetric_without_phase_shifters():
 def test_no_ibr_uses_stand_in_values():
     f = compute_features(Scenario("n", fault=FaultSpec(16)))
     assert f["scr_min"] == 99.0 and f["z_fault_ibr_min_pu"] == 9.99
+
+
+def test_impedances_converted_to_system_base_as_andes_does():
+    # A line rated 200 MVA at twice the bus voltage: ANDES scales its impedance by
+    # (100 / 200) * (690 / 345)^2 = 2. The short-circuit model must do the same.
+    import numpy as np
+
+    from ibr_faultscreen.case import build_system, remove_events
+    from ibr_faultscreen.features import _ybus
+    sheets = read_case()
+    remove_events(sheets)
+    line = sheets["Line"]
+    line["Sn"] = line["Sn"].astype(float)
+    line["Vn1"] = line["Vn1"].astype(float)
+    line.loc[0, ["Sn", "Vn1", "Vn2"]] = [200.0, 690.0, 690.0]
+    system = build_system(sheets)
+    r_sys, x_sys = float(system.Line.r.v[0]), float(system.Line.x.v[0])
+    assert x_sys == pytest.approx(2 * float(line.loc[0, "x"]), rel=1e-12)
+    Y, _ids, pos = _ybus(sheets)
+    i, k = pos[int(line.loc[0, "bus1"])], pos[int(line.loc[0, "bus2"])]
+    assert Y[i, k] == pytest.approx(-1 / complex(r_sys, x_sys), rel=1e-9)
+    assert np.allclose(Y, Y.T)

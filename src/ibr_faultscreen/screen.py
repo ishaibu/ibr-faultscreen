@@ -6,7 +6,8 @@
    labeled. Simulation always overrides the prediction.
 4. Each row says where its verdict came from: ``simulated`` or ``predicted``.
    A RISKY verdict is never shown from a prediction alone; if the simulation
-   budget runs out, the row says ``predicted RISKY, not yet verified``.
+   budget runs out, the row says ``predicted RISKY, not yet verified``, and a
+   borderline or solver-hard row says ``needs simulation (...), not yet verified``.
 5. Scenarios at solver-hard fault buses (many unknown outcomes in the training
    dataset) and at buses not in the dataset are always simulated: the model
    cannot predict where the solver fails, so it must not quietly pass them.
@@ -21,7 +22,7 @@ import numpy as np
 
 from .criteria import CriteriaSettings
 from .features import FEATURES, compute_features
-from .label import label
+from .label import format_ratio, label
 from .model import SOLVER_HARD_RATE, ModelBundle
 from .scenario import Scenario
 from .simulate import simulate
@@ -47,6 +48,7 @@ class ScreenRow:
                 "agrees": "" if sl is None else ("yes" if (sl.risky == (self.predicted == "RISKY"))
                                                  else "no"),
                 "resolution": "" if sl is None else (sl.resolution or ""),
+                "rt_ratio_max": "" if sl is None else format_ratio(sl.rt_ratio),
                 "reasons": "" if sl is None else " | ".join(sl.reasons),
                 "why": "; ".join(f"{f} (+{d:.2f})" for f, d in self.why),
                 "verify_reason": self.verify_reason}
@@ -108,6 +110,9 @@ def screen(candidates: list[Scenario], bundle: ModelBundle, settings: CriteriaSe
                          f"({time.perf_counter() - t0:.1f} s)")
         elif pred == "RISKY":
             row.verdict = "predicted RISKY, not yet verified"
+        elif need:
+            # Borderline or solver-hard, but the budget ran out: not a plain OK.
+            row.verdict = f"needs simulation ({reason}), not yet verified"
         rows.append(row)
     return rows
 

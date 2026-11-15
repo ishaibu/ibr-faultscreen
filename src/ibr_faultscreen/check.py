@@ -14,7 +14,8 @@ from dataclasses import dataclass, field
 import andes
 import yaml
 
-from .case import SYNC_MACHINE_SHEETS, build_system, find_dyr, read_case, remove_events
+from .case import (SYNC_MACHINE_SHEETS, build_system, find_dyr, read_case, remove_events,
+                   step_up_transformer)
 
 
 def supported_dyr_models() -> set[str]:
@@ -49,6 +50,7 @@ class CheckReport:
     removed_events: list = field(default_factory=list)
     pf_converged: bool = False
     errors: list = field(default_factory=list)
+    warnings: list = field(default_factory=list)
 
     @property
     def ok(self):
@@ -74,6 +76,7 @@ class CheckReport:
         if self.removed_events:
             L.append("Events already in the case (removed for screening): "
                      + ", ".join(self.removed_events))
+        L += [f"WARNING: {w}" for w in self.warnings]
         L.append(f"Power flow: {'converged' if self.pf_converged else 'DID NOT CONVERGE'}")
         L += [f"ERROR: {e}" for e in self.errors]
         L.append("Result: " + ("ready for screening" if self.ok else "fix the issues above first"))
@@ -104,6 +107,16 @@ def check_case(case: str, dyr: str | None = None) -> CheckReport:
         for _, g in df.iterrows():
             if str(g["gen"]) not in rep.slack:
                 rep.ibr_capable.append((g["gen"], int(g["bus"]), float(g["Sn"])))
+                try:
+                    _idx, _hv, n_x = step_up_transformer(sheets, int(g["bus"]))
+                except ValueError:
+                    continue
+                if n_x != 1:
+                    rep.warnings.append(
+                        f"gen {g['gen']} at bus {int(g['bus'])}: "
+                        + ("no transformer" if n_x == 0 else f"{n_x} transformers")
+                        + " at its bus, so its high-side bus cannot be identified; as an IBR, "
+                          "its ride-through is checked at its own bus instead")
     rep.removed_events = remove_events(sheets)
     try:
         rep.pf_converged = bool(build_system(sheets).PFlow.converged)

@@ -15,6 +15,10 @@ f_max_hz: 61.0                # illustrative
 rocof_limit_hz_s: 2.0         # illustrative
 rocof_window_s: 0.5           # illustrative
 
+# How time is counted across voltage bands (PRC-029 Attachment 1 note 7):
+# per_band (default) or nested (more conservative). See docs/design-spec.md.
+ride_through_counting: per_band
+
 envelopes:
   - name: example_voltage
     quantity: voltage         # pu at the IBR terminal

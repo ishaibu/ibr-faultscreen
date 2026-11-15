@@ -13,7 +13,7 @@
 
 IBR-FaultScreen simulates many three-phase fault scenarios, labels each one RISKY or OK by
 failure mode (rotor-angle instability, slow voltage recovery, IBR ride-through exposure under
-NERC PRC-029-1, frequency), and trains a classifier that ranks new scenarios so engineers know
+NERC PRC-029, frequency), and trains a classifier that ranks new scenarios so engineers know
 which contingencies to study in detail first. Every RISKY result shown to a user is verified
 by simulation. An equal-area view shows why the synchronous machines stay in step, or do not.
 
@@ -28,7 +28,7 @@ RISKY faults grows from 16% with no IBRs to 52% with four. <a href="https://isha
 > interconnection study. RMS positive-sequence simulation (ANDES), generic WECC IBR models,
 > balanced faults.
 
-Version 0.2.0. Author: Shaibu Ibrahim, P.E. License: GPL-3.0-or-later.
+Version 0.3.0. Author: Shaibu Ibrahim, P.E. License: GPL-3.0-or-later.
 
 ## Try it
 
@@ -38,15 +38,16 @@ Version 0.2.0. Author: Shaibu Ibrahim, P.E. License: GPL-3.0-or-later.
   for example [IBRs on generators 8 and 9, fault at bus 16, 6 cycles](https://ishaibu.github.io/ibr-faultscreen/demo/#explore=g89-b16-c6).
 - **[Quiz: guess first](https://ishaibu.github.io/ibr-faultscreen/demo/#quiz)**: RISKY or OK? Ten real cases, scored against you and
   the screening model.
-- **[Interactive demo report](https://ishaibu.github.io/ibr-faultscreen/demo/)**: the 5,000-scenario dataset with the animated network
-  map, the ranked table, the model card, and trajectories you can replay, with the
-  equal-area view.
+- **[Interactive dashboard](https://ishaibu.github.io/ibr-faultscreen/demo/)**: the 5,000-scenario dataset with filters, a zoomable
+  network map, failure modes, ride-through exposure by band and bus, the machine-learning (ML)
+  screening model, trajectories you can replay, and the equal-area view. Works on a phone. The
+  [printable report](https://ishaibu.github.io/ibr-faultscreen/demo/report/) has the same results as one document.
 - **[Run real simulations in Google Colab](https://colab.research.google.com/github/ishaibu/ibr-faultscreen/blob/main/examples/colab_quickstart.ipynb)**, free, nothing to install: example
   faults, the interactive report, your own fault bus, clearing time and IBRs with sliders,
   two-scenario comparison, a clearing-time sweep and a critical clearing time. Needs a Google
   account.
 - **On your computer:** `pip install ibr-faultscreen`, then `ibr-faultscreen example`. It runs
-  five scenarios in about a minute and opens the same kind of report.
+  five scenarios in about a minute and opens the same kind of report (and writes a dashboard).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/ishaibu/ibr-faultscreen/main/docs/images/trajectories.gif" width="760"
@@ -91,9 +92,10 @@ the same Zenodo record (the DOI above always opens the latest version) together 
 
 - **Risk grows with IBR share.** 16% of faults were RISKY with no IBRs, 31% with one, 52% with
   four.
-- **Ride-through exposure came from overvoltage, not undervoltage.** Of 689 scenarios with
-  PRC-029-1 exposure, all but one had the IBR high-side voltage above 1.1 pu after the fault
-  cleared (sustained above 1.1 pu, or briefly above 1.2 pu).
+- **Ride-through exposure came from overvoltage, not undervoltage.** 898 scenarios had
+  PRC-029 exposure (689 bolted runs plus 209 confirmed through the milder fault), all but two
+  from overvoltage: the IBR high-side voltage stayed above 1.1 pu after the fault cleared, or
+  went briefly above 1.2 pu.
   This depends strongly on the generic IBR parameters.
 - **The learned model ranks better than a simple rule** (clearing time and lowest SCR), tested
   only on fault buses it never saw: AUC 0.86 vs. 0.78, average precision 0.67 vs. 0.52.
@@ -125,7 +127,7 @@ flowchart LR
     F --> G[Classifier<br/>evaluated on unseen fault locations]
     G --> H[Screen new scenarios]
     H --> I[Re-simulate predicted RISKY<br/>and borderline]
-    I --> J[HTML report]
+    I --> J[HTML report<br/>and dashboard]
 ```
 
 ## Install
@@ -154,19 +156,37 @@ ibr-faultscreen example
 
 Runs five scenarios on the IEEE 39-bus case (about a minute; the very first run takes
 longer while ANDES prepares its models) and opens an HTML report. Results go to
-`example_output/`. Every output folder ignores itself in Git.
+`example_output/`, with `dashboard.html` next to the report (`ibr-faultscreen example
+--dashboard` opens both). Every output folder ignores itself in Git.
+
+## Dashboard
+
+`simulate`, `screen` and `example` write `dashboard.html` next to the report, and
+`ibr-faultscreen dashboard results.csv` builds one from any results, dataset or screening file.
+It is one HTML file that works offline: views for the overview, network map, scenarios,
+failure modes, ride-through, trajectories, the equal-area view and the machine-learning (ML)
+screening model; filters by number of IBRs,
+clearing time, outcome and failure mode; a zoomable map with details for any bus; search, sort
+and CSV download; print to PDF; dark mode; laid out for phones. It shows the results exactly as
+the report does and calculates nothing new: the filters only choose which scenarios are counted.
+
+<p align="center">
+  <a href="https://ishaibu.github.io/ibr-faultscreen/demo/"><img src="https://raw.githubusercontent.com/ishaibu/ibr-faultscreen/main/docs/images/dashboard.png" width="760"
+  alt="IBR-FaultScreen dashboard: navy sidebar of views, filters, six summary cards, the IEEE 39-bus network map shaded by RISKY share, and the riskiest fault buses"></a>
+</p>
 
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `ibr-faultscreen check CASE` | Is a case ready? Lists unsupported PSS/E dynamic models, generators that can become IBRs, power flow status |
-| `ibr-faultscreen simulate SCENARIOS.yaml` | Runs your scenarios; writes results, figures and a report |
+| `ibr-faultscreen simulate SCENARIOS.yaml` | Runs your scenarios; writes results, figures, a report and a dashboard |
 | `ibr-faultscreen cct --bus 16` | Critical clearing time at one or more buses, with the equal-area view just below and above it |
 | `ibr-faultscreen dataset --n 5000` | Generates a labeled dataset in parallel (resumable, with a data card); `--scenarios LIST.csv` runs your own list instead |
 | `ibr-faultscreen train dataset.csv` | Evaluates rule, logistic and gradient-boosting models on unseen fault locations; trains one |
 | `ibr-faultscreen screen --model model.joblib` | Ranks new scenarios and verifies the risky ones by simulation |
 | `ibr-faultscreen report results.csv` | Builds the HTML report from any results file |
+| `ibr-faultscreen dashboard results.csv` | Builds the interactive dashboard from any results, dataset or screening file |
 
 Add `--help` to any command for its options. A scenario file looks like this:
 
@@ -188,7 +208,7 @@ from ibr_faultscreen.simulate import simulate
 scenario = Scenario("my_case", ibrs=(IBRSpec(2), IBRSpec(6, kind="bess")),
                     fault=FaultSpec(16, clear_time=0.10))
 result = simulate(scenario)                  # ANDES time-domain run
-verdict = label(result, default_criteria())  # PRC-029-1 ride-through and other checks
+verdict = label(result, default_criteria())  # PRC-029 ride-through and other checks
 print(result.status, "RISKY" if verdict.risky else "OK", verdict.reasons)
 ```
 
@@ -198,11 +218,20 @@ picked up automatically, or pass `--dyr`), then use `case: mycase.raw` in the sc
 ## Criteria
 
 Screening limits live in a YAML file. The built-in file
-(`src/ibr_faultscreen/data/criteria_prc029.yaml`) holds the NERC PRC-029-1 voltage and
+(`src/ibr_faultscreen/data/criteria_prc029.yaml`) holds the NERC PRC-029 voltage and
 frequency ride-through tables (Table 2, "All Other IBR", which covers PV and BESS; and
-Table 3), transcribed from the NERC PDF and checked row by row. Its angle, voltage-recovery and frequency limits are **illustrative**: replace them with
-your transmission provider's criteria (`--criteria myfile.yaml`). See
+Table 3), transcribed from the NERC PDF and checked row by row. PRC-029-2 (filed with FERC in
+August 2026) has the same Tables 2 and 3 as PRC-029-1; confirm the version in force for your
+study. The file's angle, voltage-recovery and frequency limits are **illustrative**: replace
+them with your transmission provider's criteria (`--criteria myfile.yaml`). See
 `examples/criteria_example.yaml` for the format.
+
+Ride-through time is counted per band by default. PRC-029 Attachment 1 note 7 ("add the
+duration within each band") can also be read so that time in a deeper band counts toward the
+shallower ones too; `--rt-counting nested` (or `ride_through_counting: nested` in the file)
+uses that more conservative reading. Every results file has an `rt_ratio_max` column: the
+largest share of an allowed ride-through time used by any IBR. Above 1 is exposure; 0.8 to 1 is
+a near miss worth a look.
 
 ## IBR models
 

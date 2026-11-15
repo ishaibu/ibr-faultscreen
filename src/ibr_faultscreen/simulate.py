@@ -153,7 +153,10 @@ def _collect(system, changes) -> Trajectories:
         ibr_bus=list(reg.bus.v) if n else [],
         ibr_hv_bus=[hv.get(str(g), b) for g, b in zip(reg.gen.v, reg.bus.v)] if n else [],
         ibr_ip=_series(system, reg.Ipout) if n else np.empty((t.size, 0)),
-        ibr_iq=_series(system, reg.Iqout_x) if n else np.empty((t.size, 0)),
+        # Reactive current after the converter's lower limit (Iolim): ANDES records
+        # only the value before that limiter (Iqout_x), and Iqout_y = max(x, Iolim).
+        ibr_iq=(np.maximum(_series(system, reg.Iqout_x), np.asarray(reg.Iolim.v, dtype=float))
+                if n else np.empty((t.size, 0))),
         ibr_imax=np.asarray(system.REECA1.Imax.v, dtype=float) if n else np.empty(0),
         te=np.hstack(tes) if tes else empty, tm=np.hstack(tms) if tms else empty,
         machine_m=np.concatenate(ms) if ms else np.empty(0),

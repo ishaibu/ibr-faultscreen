@@ -75,3 +75,25 @@ fault P_e = 0, so the machine accelerates at a constant rate.
 
 Date: ________  IBR-FaultScreen version: ______  Method: hand calculator / own spreadsheet
 
+## 4. Ride-through counting and the time ratio (PRC-029 Table 2)
+
+Built-in Table 2 bands used here: 0.50–0.70 pu for at most 3.00 s; 0.70–0.90 pu
+for at most 6.00 s; 0.90–1.05 pu continuous. Trajectory: 2.5 s at 0.60 pu, then
+4.0 s at 0.80 pu, then back to 1.0 pu (all inside one 10 s window).
+
+1. Per band: time in 0.50–0.70 = ____ s (limit 3 s); time in 0.70–0.90 = ____ s
+   (limit 6 s). Inside or outside? ____
+2. Nested (time below 0.90 pu counts toward the 0.70–0.90 band too): time below
+   0.90 pu = ____ s (limit 6 s). Inside or outside? ____
+3. Ratio = time spent / time allowed, largest over the bands: per band ____ ;
+   nested ____ . A near miss is 0.8 to 1.
+
+| Quantity | Your value | Code value (tests/test_ride_through_counting.py) | Match? |
+|---|---|---|---|
+| Per band verdict | | inside (2.5 < 3, 4.0 < 6) | |
+| Nested verdict | | outside (6.5 > 6) | |
+| Ratio, per band | | 0.833 (near miss) | |
+| Ratio, nested | | 1.083 | |
+
+Date: ________  IBR-FaultScreen version: ______
+

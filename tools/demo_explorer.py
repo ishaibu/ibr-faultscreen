@@ -421,3 +421,11 @@ def inject(html: str, layout, edges, data_src: str = "explorer-data.js") -> str:
     script = (f'<script>window.EXPLORER_LAYOUT={explorer_layout_json(layout, edges)};</script>\n'
               f'<script src="{data_src}"></script>\n<script>{JS}</script>\n')
     return html.replace("</body>", script + "</body>", 1)
+
+
+def dashboard_parts(layout, edges, data_src: str = "explorer-data.js"):
+    """(extra_head, explorer_html, extra_body) for dashboard.build_dashboard."""
+    head = f"<style>{CSS}</style>"
+    body = (f'<script>window.EXPLORER_LAYOUT={explorer_layout_json(layout, edges)};</script>\n'
+            f'<script src="{data_src}"></script>\n<script>{JS}</script>\n')
+    return head, HTML, body

@@ -35,9 +35,9 @@ SYNC_MACHINE_SHEETS = ("GENROU", "GENSAL", "GENCLS")
 
 #: Active-power limits (pu on the IBR's own MVA rating).
 #: ANDES's REECA1 fixes its minimum active current at zero, so a charging
-#: battery cannot be represented in v0.1 (REEC_C is not in ANDES 2.0.0).
-#: A "bess" IBR therefore uses the same models as "solar" and must be
-#: discharging or idle; the kind label is kept for reporting and v0.2.
+#: battery cannot be represented (REEC_C, the WECC battery controller, is not
+#: in ANDES 2.0.0). A "bess" IBR therefore uses the same models as "solar" and
+#: must be discharging or idle; the kind label is kept for reporting.
 P_LIMITS = {"solar": (0.0, 1.0), "bess": (0.0, 1.0)}
 
 
@@ -154,11 +154,17 @@ def _is_slack(sheets, gen):
 def _step_up_branch(sheets, bus):
     """The IBR's main power transformer: (branch idx, high-side bus).
 
-    PRC-029-1 measures ride-through voltage and frequency at the high side of
+    PRC-029 measures ride-through voltage and frequency at the high side of
     the main power transformer, so the screening checks use that bus. If the
-    IBR bus has no transformer, its only branch is used and the high-side bus
-    is the IBR bus itself.
+    IBR bus has no transformer, or more than one, the high-side bus cannot be
+    identified and the IBR bus itself is used (`check` warns about this).
     """
+    idx, hv, _n = step_up_transformer(sheets, bus)
+    return idx, hv
+
+
+def step_up_transformer(sheets, bus):
+    """(branch idx, high-side bus, number of transformers at the bus)."""
     lines = sheets["Line"]
     at_bus = lines[(lines["bus1"] == bus) | (lines["bus2"] == bus)]
     if at_bus.empty:
@@ -167,8 +173,8 @@ def _step_up_branch(sheets, bus):
     if len(xfmr) == 1:
         row = xfmr.iloc[0]
         hv = int(row["bus2"] if int(row["bus1"]) == bus else row["bus1"])
-        return row["idx"], hv
-    return at_bus.iloc[0]["idx"], bus
+        return row["idx"], hv, 1
+    return at_bus.iloc[0]["idx"], bus, len(xfmr)
 
 
 def _drop_linked(sheets, column, ids):
@@ -226,21 +232,21 @@ def convert_to_ibr(sheets: dict[str, pd.DataFrame], spec: IBRSpec) -> dict:
     """
     sheet, machine = _machine_for_gen(sheets, spec.gen)
     syn, bus, sn = str(machine["idx"]), int(machine["bus"]), float(machine["Sn"])
+    # All checks before anything is changed, so an error leaves `sheets` intact.
+    if _is_slack(sheets, machine["gen"]):
+        raise ValueError(f"generator {spec.gen!r} is the slack (swing) generator; "
+                         "it cannot be replaced by an IBR")
     dispatch = _gen_dispatch(sheets, machine["gen"])
     if dispatch is not None and dispatch < 0:
         raise ValueError(
             f"generator {spec.gen!r} is dispatched at {dispatch:g} pu (absorbing power). "
-            "v0.1 IBR models cannot absorb active power, so a charging battery is "
-            "not supported yet.")
+            "The IBR models cannot absorb active power, so a charging battery is "
+            "not supported.")
+    branch, hv_bus = _step_up_branch(sheets, bus)
 
     sheets[sheet] = sheets[sheet][sheets[sheet]["idx"].astype(str) != syn]
     controls = _drop_linked(sheets, "syn", [syn])          # governors, exciters
     controls += _drop_linked(sheets, "avr", controls)      # stabilizers on those exciters
-
-    if _is_slack(sheets, machine["gen"]):
-        raise ValueError(f"generator {spec.gen!r} is the slack (swing) generator; "
-                         "it cannot be replaced by an IBR")
-    branch, hv_bus = _step_up_branch(sheets, bus)
 
     tag = f"{spec.kind.upper()}_{spec.gen}"
     t = _template_rows(spec.profile)

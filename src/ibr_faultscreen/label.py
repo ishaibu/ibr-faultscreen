@@ -14,12 +14,18 @@ Each scenario gets one flag per failure mode plus an overall RISKY / OK:
 =========================  ====================================================
 
 A failed bolted fault (milder-fault check) also gets a `resolution`: "confirmed" when its
-milder-fault rerun is already RISKY, "unresolved" when that rerun is OK.
+milder-fault rerun is already RISKY, "unresolved" when that rerun is OK. A confirmed
+scenario keeps ``sim_fail`` and takes its other flags from the milder-fault rerun, so
+counts by failure mode include it; an unresolved one leaves them empty (unknown).
+
+``rt_ratio`` is the largest share of an allowed ride-through time used by any IBR
+(time spent in a band / the band's minimum ride-through time): above 1 is exposure,
+0.8 to 1 a near miss (see criteria.NEAR_MISS_RATIO).
 
 A flag is True (violated), False (checked and passed) or None (not evaluated,
 for example because its limits are not set). Only True flags make a scenario
 RISKY. Ride-through and frequency checks are made at the high side of each
-IBR's step-up transformer, where PRC-029-1 measures them. Frequency checks skip
+IBR's step-up transformer, where PRC-029 measures them. Frequency checks skip
 the fault-on period plus one measurement window after clearing, because measured bus
 frequency is not meaningful while a fault depresses the voltage. Bus frequency
 is measured from the voltage angle over `freq_window_s` (six cycles by default).
@@ -47,7 +53,9 @@ class ScenarioLabels:
     #: For failed bolted faults (milder-fault check): "confirmed" if a milder rerun is already
     #: RISKY, "unresolved" if not (needs a detailed study). Otherwise None.
     resolution: str | None = None
-    diagnostic: "ScenarioLabels | None" = None
+    diagnostic: ScenarioLabels | None = None
+    #: Largest ride-through time ratio over all IBRs (None: no IBR or not evaluated).
+    rt_ratio: float | None = None
 
     @property
     def reasons(self) -> list[str]:
@@ -59,8 +67,16 @@ class ScenarioLabels:
                "label": "RISKY" if self.risky else "OK",
                "resolution": self.resolution or ""}
         row.update({k: ("" if v is None else bool(v)) for k, v in self.flags.items()})
+        row["rt_ratio_max"] = format_ratio(self.rt_ratio)
         row["reasons"] = " | ".join(self.reasons)
         return row
+
+
+def format_ratio(r):
+    """Ride-through ratio for a results file: '' (none), 'inf', or 3 decimals."""
+    if r is None:
+        return ""
+    return "inf" if r == float("inf") else round(float(r), 3)
 
 
 def _merge(results):
@@ -129,12 +145,15 @@ def label(result: SimResult, settings: CriteriaSettings) -> ScenarioLabels:
         for env in settings.envelopes:
             x = tr.bus_v(hv) if env.quantity == "voltage" else tr.bus_f(hv, f_win)
             ign = f_ignore if env.quantity == "frequency" else None
-            rt.append(ride_through_exposure(tr.t, x, env, label=f"{ibr} (bus {hv})", ignore=ign))
+            rt.append(ride_through_exposure(tr.t, x, env, label=f"{ibr} (bus {hv})", ignore=ign,
+                                            counting=settings.ride_through_counting))
     results += rt
     flags["ride_through_exposure"] = _merge(rt)
+    ratios = [r.ratio for r in rt if r.ratio is not None]
 
     risky = any(v is True for v in flags.values())
-    return ScenarioLabels(sid, result.status, flags, risky, results)
+    return ScenarioLabels(sid, result.status, flags, risky, results,
+                          rt_ratio=max(ratios) if ratios else None)
 
 
 def _resolve(out: ScenarioLabels, result: SimResult, settings: CriteriaSettings):
@@ -160,6 +179,11 @@ def _resolve(out: ScenarioLabels, result: SimResult, settings: CriteriaSettings)
     where = f"milder fault x = {diag.scenario.fault.x_pu:g} pu{resid}"
     if dl.risky:
         out.resolution = "confirmed"
+        # Failure modes come from the milder fault (sim_fail stays True).
+        for k, v in dl.flags.items():
+            if k != "sim_fail":
+                out.flags[k] = v
+        out.rt_ratio = dl.rt_ratio
         out.results.append(CriterionResult(
             "bolted_fault", False,
             detail=f"bolted run failed; {where} is already RISKY: " + " | ".join(dl.reasons)))

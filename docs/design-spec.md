@@ -1,4 +1,4 @@
-# IBR-FaultScreen design spec (v0.2)
+# IBR-FaultScreen design spec (v0.3)
 
 *Updated 2026-10-23. Author: Shaibu Ibrahim, P.E. License: GPL-3.0-or-later.
 Abbreviations are explained in `docs/glossary.md`.*
@@ -45,7 +45,17 @@ them.
 - Demo page: "Build your own grid" explorer (every combination simulated in
   advance), shareable links, quiz mode.
 
-**Later (not in v0.2)**
+**Added in v0.3**
+- Dashboard (`ibr-faultscreen dashboard`, and `dashboard.html` from `simulate`,
+  `screen` and `example`): the same results as the report, as an application with
+  views, filters and a zoomable map. It calculates nothing new.
+- Ride-through near misses (`rt_ratio_max`) and a counting option for PRC-029
+  Attachment 1 note 7 (`per_band` or `nested`).
+- PRC-029-2 noted (same Tables 2 and 3 as PRC-029-1).
+
+**Later (not in v0.3)**
+- A settings file per IBR (study settings vs. as-left settings), and comparing two
+  runs side by side.
 - Single-line-to-ground (SLG) equivalent faults.
 - Grid-forming vs. grid-following comparison (first confirm which grid-forming
   models ANDES provides).
@@ -96,9 +106,9 @@ them.
   (governor, exciter, stabilizer) are removed, not just disabled. Flat runs of
   20 s then hold steady state exactly, with one to three IBRs.
 - **[Fact]** ANDES's REECA1 fixes its minimum active current at zero, and
-  REECC1 (the WECC battery controller) is not in ANDES 2.0.0. So in v0.1 a BESS
-  uses the same models as solar and must be discharging or idle; a charging
-  dispatch is rejected with a clear error. Charging BESS is planned for v0.2.
+  REECC1 (the WECC battery controller) is not in ANDES 2.0.0. So a BESS uses the
+  same models as solar and must be discharging or idle; a charging dispatch is
+  rejected with a clear error. Charging BESS waits for a battery controller in ANDES.
 - **[Fact]** IBR parameters are copied from ANDES's `ieee14_solar` example.
   The voltage-dependent current limit tables are capped at the inverter current
   limit, which ANDES needs for a consistent initialization.
@@ -223,8 +233,17 @@ specific inverter's protection trips. So the tool reports **exposure**:
 and any 10-minute window for frequency; band edges follow the table (for
 example 0.90–1.05 pu closed, "> 1.05" open below). Not implemented: the
 "more than four deviations in 10 s" rule, the frequency condition on the
-voltage tables, and the phase-jump and V/Hz exemptions. **[To verify]** the
-version in force (a modified PRC-029 filing was anticipated in August 2026).
+voltage tables, and the phase-jump and V/Hz exemptions. **[Fact]** PRC-029-2
+(adopted by the NERC Board on August 18, 2026; filed with FERC on August 28,
+2026) has the same Tables 2 and 3; it changes the hardware-limitation exemption
+and adds one for HVDC-connected IBRs with choppers. **[To verify]** the version
+in force and its effective date for a given study.
+
+**Counting (note 7).** "Add the duration within each band" is read per band by
+default: time at 0.6 pu counts toward the 0.50–0.70 pu band only. The `nested`
+option (more conservative) also counts it toward every shallower band (0.70–0.90
+pu). Each result records the largest share of an allowed time used
+(`rt_ratio_max`); 0.8 to 1 is reported as a near miss.
 
 **Overall label:** RISKY if any criterion is violated, or if the simulation fails.
 Otherwise OK. Each individual failure mode is kept as its own label.
@@ -452,7 +471,7 @@ ibr-faultscreen report results.csv [--open]
    solved, but the faulted bus keeps about 0.09–0.20 pu, so the fault is no
    longer bolted. Recheck with the one-cycle step.
 3. PSS/E RAW v35 behavior.
-4. PRC-029-1 tables and notes checked by the author (2026-10-09). Open: the
-   note 7 reading (separate bands, as implemented, or nested thresholds, more
-   conservative). Enter IEEE 2800-2022 envelopes (author).
+4. PRC-029-1 tables and notes checked by the author (2026-10-09). The note 7
+   reading is now a setting (per band by default, or nested). Check the
+   PRC-029-2 table rows against its PDF. Enter IEEE 2800-2022 envelopes (author).
 5. Voltage-recovery and frequency defaults (entered by the author).

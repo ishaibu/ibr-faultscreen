@@ -7,14 +7,14 @@ Abbreviations and terms used in IBR-FaultScreen, its reports and its documents.
 | Term | Stands for | Meaning here |
 |---|---|---|
 | IBR | Inverter-based resource | Solar, wind (type 3/4) or battery storage connected through power electronics |
-| BESS | Battery energy storage system | A battery plant; in v0.1 it must be discharging or idle |
+| BESS | Battery energy storage system | A battery plant; here it must be discharging or idle (charging is not modeled) |
 | POI | Point of interconnection | Where a plant connects to the grid |
 | SCR | Short-circuit ratio | Short-circuit MVA at the IBR's connection bus divided by the IBR's MVA rating; low SCR means a weak grid |
 | CCT | Critical clearing time | The longest fault duration after which the machines stay in step |
 | RMS simulation | Root mean square | Phasor (positive-sequence) dynamic simulation, as in PSS/E or PSLF |
 | EMT | Electromagnetic transient | Detailed waveform simulation (PSCAD-type); not done by this tool |
 | SMIB | Single machine, infinite bus | The textbook one-generator test case used to check the CCT method |
-| SLG | Single line to ground | An unbalanced fault type; not in v0.1 |
+| SLG | Single line to ground | An unbalanced fault type; not modeled (balanced three-phase faults only) |
 | pu | Per unit | A value divided by its base (for example 1.05 pu voltage = 105% of nominal) |
 | RoCoF | Rate of change of frequency | How fast frequency moves after a disturbance (Hz/s) |
 | MVA, MW | Megavolt-ampere, megawatt | Apparent and active power |
@@ -23,6 +23,9 @@ Abbreviations and terms used in IBR-FaultScreen, its reports and its documents.
 | Milder-fault check | — | When a bolted fault cannot be solved, the tool reruns it at 0.001 then 0.003 pu: "confirmed" if the milder fault is already RISKY, "unresolved" if it is OK |
 | Solver-hard fault bus | — | A fault location where the solver often fails; `screen` always simulates scenarios there |
 | Ride-through | — | An IBR staying connected and controlled through a voltage or frequency disturbance |
+| Ride-through ratio (`rt_ratio_max`) | — | Time an IBR spent in a ride-through band divided by the band's minimum ride-through time, largest over all IBRs and bands: above 1 is exposure, 0.8 to 1 a near miss, `inf` time in a band where tripping is permitted at once |
+| Per-band / nested counting | — | Two readings of PRC-029 Attachment 1 note 7: count time only in the band the voltage is in (per band, default), or also toward every shallower band (nested, more conservative) |
+| Dashboard | — | The interactive HTML page (`dashboard.html`) with views, filters and a zoomable map; same results as the report |
 | Equal-area criterion | — | Classical rotor-angle stability test: a machine stays in step if the energy it gains while the fault is on (accelerating area) can be given back after clearing (decelerating area) |
 | Single-machine equivalent | — | The machines split into a leading group and the rest, reduced to one equivalent machine so the equal-area picture applies to a multi-machine system (the SIME / extended equal-area idea) |
 | Accelerating / decelerating area | — | ∫(P_m − P_e)dδ while the fault is on / −∫(P_m − P_e)dδ after clearing, in pu·rad (pu power × radians) |
@@ -35,7 +38,7 @@ Abbreviations and terms used in IBR-FaultScreen, its reports and its documents.
 | Term | Stands for |
 |---|---|
 | NERC | North American Electric Reliability Corporation |
-| PRC-029-1 | NERC standard "Frequency and Voltage Ride-through Requirements for Inverter-based Resources" (PRC = protection and control) |
+| PRC-029-1, PRC-029-2 | NERC standard "Frequency and Voltage Ride-through Requirements for Inverter-based Resources" (PRC = protection and control); version 2 keeps the same ride-through tables |
 | TPL-001 | NERC transmission system planning performance standard |
 | FERC | Federal Energy Regulatory Commission |
 | IEEE | Institute of Electrical and Electronics Engineers |

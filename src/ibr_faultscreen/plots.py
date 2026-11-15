@@ -248,8 +248,9 @@ def trace_payload(result: SimResult, labels: ScenarioLabels, settings: CriteriaS
             series.append({"name": f"bus {tr.ibr_hv_bus[j]} reactive", "color": _ibr_color(k),
                            "w": 1.2, "dash": True,
                            "y": _round(np.abs(tr.ibr_iq[:, j]) / tr.ibr_imax[j], 4)})
+        top = max(1.15, float(np.nanmax(frac)) * 1.05) if np.isfinite(frac).any() else 1.15
         panels.append({"key": "i", "label": "IBR current / limit", "unit": "", "nd": 3,
-                       "ylim": [0, 1.15], "series": series,
+                       "ylim": [0, round(top, 3)], "series": series,
                        "limits": [{"y": 1.0, "text": "current limit"}], "shade": shade,
                        "note": "dotted = reactive part"})
     else:
@@ -373,7 +374,8 @@ def plot_scenario(result: SimResult, labels: ScenarioLabels, settings: CriteriaS
             ax.plot(t, np.abs(tr.ibr_iq[:, j]) / tr.ibr_imax[j], linewidth=1, linestyle=":",
                     color=_ibr_color(k), label="reactive part (dotted)" if j == 0 else "_nolegend_")
         _limit(ax, 1.0, "current limit")
-        ax.set_ylim(0, 1.15)
+        fin = frac[np.isfinite(frac)]
+        ax.set_ylim(0, max(1.15, float(fin.max()) * 1.05) if fin.size else 1.15)
         _legend(ax)
     else:
         ax.text(0.5, 0.5, "no IBRs in this scenario", transform=ax.transAxes,

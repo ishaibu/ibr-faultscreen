@@ -42,6 +42,9 @@ class CCTResult:
     #: estimate for the bolted CCT (a milder fault is assumed no more severe).
     upper_s: float | None = None
     upper_x_pu: float | None = None
+    #: True when the milder fault was still stable at the search limit, so its
+    #: CCT is above upper_s rather than equal to it.
+    upper_is_limit: bool = False
 
     def summary(self) -> dict:
         return {"scenario_id": self.scenario_id, "cct_status": self.status,
@@ -57,7 +60,8 @@ class CCTResult:
         if self.status == "lower_bound":
             up = ("" if self.upper_s is None else
                   f"; a milder fault (x = {self.upper_x_pu:g} pu) has CCT "
-                  f"{self.upper_s * 1000:.0f} ms")
+                  f"{'above ' if self.upper_is_limit else ''}{self.upper_s * 1000:.0f} ms"
+                  f"{' (search limit)' if self.upper_is_limit else ''}")
             return (f"CCT at least {self.stable_s * 1000:.0f} ms; longer clearing times "
                     f"could not be solved for the bolted fault{up}")
         if self.status == "below_min":
@@ -145,6 +149,6 @@ def critical_clearing_time(base: Scenario, t_min_s: float = 0.02, t_max_s: float
                 out.upper_s, out.upper_x_pu = sub.cct_s, x
                 break
             if sub.status == "above_max":
-                out.upper_s, out.upper_x_pu = t_max_s, x
+                out.upper_s, out.upper_x_pu, out.upper_is_limit = t_max_s, x, True
                 break
     return out

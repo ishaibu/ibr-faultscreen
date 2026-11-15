@@ -45,16 +45,39 @@ NO_IBR_SCR = 99.0
 NO_IBR_DIST = 9.99
 
 
+def _bus_kv(sheets):
+    bus = sheets["Bus"]
+    if "Vn" not in bus.columns:
+        return {}
+    return {int(b): float(v) for b, v in zip(bus["idx"], bus["Vn"]) if v == v and float(v) > 0}
+
+
+def _vratio2(rated_kv, bus_kv):
+    """(rated / bus nominal voltage)^2, the factor ANDES applies when it converts
+    an impedance from the equipment's own base to the system base."""
+    try:
+        r = float(rated_kv)
+    except (TypeError, ValueError):
+        return 1.0
+    if not (r == r and r > 0) or not bus_kv:
+        return 1.0
+    return (r / bus_kv) ** 2
+
+
 def _ybus(sheets, sbase=100.0):
     bus_ids = [int(b) for b in sheets["Bus"]["idx"]]
     pos = {b: i for i, b in enumerate(bus_ids)}
+    kv = _bus_kv(sheets)
     n = len(bus_ids)
     Y = np.zeros((n, n), dtype=complex)
     lines = sheets["Line"]
     if "u" in lines.columns:
         lines = lines[lines["u"] == 1]
     for _, ln in lines.iterrows():
-        scale = sbase / float(ln.get("Sn", sbase) or sbase)     # to system base
+        # To the system base, as ANDES does: power base (Sb / Sn) and voltage base
+        # ((Vn1 / bus1 nominal kV)^2; equal to 1 when the rating matches the bus).
+        scale = (sbase / float(ln.get("Sn", sbase) or sbase)
+                 * _vratio2(ln.get("Vn1"), kv.get(int(ln["bus1"]))))
         z = complex(ln["r"], ln["x"]) * scale
         y = 1 / z
         b = float(ln.get("b", 0) or 0) / scale
@@ -72,6 +95,7 @@ def _ybus(sheets, sbase=100.0):
 def machine_table(sheets):
     """(bus, MVA, X'd on system base, H) for every synchronous machine left in the case."""
     rows = []
+    kv = _bus_kv(sheets)
     for name in SYNC_MACHINE_SHEETS:
         df = sheets.get(name)
         if df is None or df.empty:
@@ -81,7 +105,8 @@ def machine_table(sheets):
         for _, g in df.iterrows():
             sn = float(g["Sn"])
             xd1 = float(g["xd1"]) if "xd1" in g and g["xd1"] == g["xd1"] else 0.3
-            rows.append((int(g["bus"]), sn, xd1 * 100.0 / sn, float(g["M"]) / 2.0))
+            vr2 = _vratio2(g.get("Vn"), kv.get(int(g["bus"])))
+            rows.append((int(g["bus"]), sn, xd1 * 100.0 / sn * vr2, float(g["M"]) / 2.0))
     return rows
 
 

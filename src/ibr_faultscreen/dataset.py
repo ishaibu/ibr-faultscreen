@@ -118,6 +118,7 @@ def evaluate(sc: Scenario, settings: CriteriaSettings) -> dict:
                 "resolution": summ["resolution"]})
     for k, v in lab.flags.items():
         row[f"flag_{k}"] = "" if v is None else int(v)
+    row["rt_ratio_max"] = summ["rt_ratio_max"]
     row.update({"fault_residual_pu": result.fault_residual_pu,
                 "diagnostic_runs": result.summary()["diagnostic_runs"],
                 "reasons": summ["reasons"], "message": result.message,
@@ -188,7 +189,8 @@ def _fields():
     from .label import LABELS
     base = ["scenario_id", "case", "load_scale", "ibrs", "ibr_profile", "fault_bus", "clear_time_s",
             "fault_x_pu", "t_end_s", "status", "label", "risky", "resolution"]
-    return (base + [f"flag_{k}" for k in LABELS] + [f for f in FEATURES if f not in base]
+    return (base + [f"flag_{k}" for k in LABELS] + ["rt_ratio_max"]
+            + [f for f in FEATURES if f not in base]
             + ["pf_converged", "scr_by_ibr", "fault_residual_pu", "diagnostic_runs",
                "reasons", "message", "feature_error", "andes_version"] + list(RUNTIME_COLUMNS))
 

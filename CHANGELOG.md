@@ -4,11 +4,76 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
+### Added
+- **Dashboard**: `ibr-faultscreen dashboard FILE.csv` turns a dataset, results or
+  screening file into one self-contained HTML page (works offline): a sidebar of
+  views (Overview, Network map, Scenarios, Failure modes, Ride-through,
+  Trajectories, Equal-area view, ML screening model, Critical clearing time,
+  Method & assumptions),
+  filters that stay in place (number of IBRs, clearing time, outcome, failure
+  mode), summary cards, a zoomable network map with details for any bus, a
+  searchable and sortable scenario table with CSV download, print to PDF, and a
+  dark mode. Laid out for phones, tablets, desktops and wide screens (two
+  trajectory charts per row). `simulate`, `screen` and
+  `example` write `dashboard.html` next to `report.html` (`--open-dashboard`, or
+  `example --dashboard`, opens it). The report is unchanged.
+- **Ride-through near misses**: a new `rt_ratio_max` column (results, dataset and
+  screening files) gives the largest share of an allowed ride-through time used
+  by any IBR (time spent in a band / the band's minimum ride-through time). Above
+  1 is exposure, 0.8 to 1 a near miss, `inf` time in a band where tripping is
+  permitted at once.
+- **Ride-through counting option** for the open reading of PRC-029 Attachment 1
+  note 7: `per_band` (default, unchanged results) or `nested` (more
+  conservative: time at 0.6 pu also counts toward the 0.70-0.90 pu band).
+  Set `ride_through_counting` in a criteria file or use `--rt-counting` on
+  `example`, `simulate`, `cct`, `dataset` and `screen`.
+- `check` warns when a generator's bus has no step-up transformer, or more than
+  one, because its ride-through is then checked at its own bus.
+- Tests run on Python 3.11, 3.12 and 3.13.
+
 ### Changed
+- Criteria file and documentation cover **PRC-029-2** (adopted by the NERC Board
+  on August 18, 2026; filed with FERC on August 28, 2026). Its Tables 2 and 3
+  have the same values as PRC-029-1, so the envelopes and results are
+  unchanged. Confirm the version in force and its effective date for a study.
+- A scenario whose bolted fault cannot be solved but whose milder fault is
+  already RISKY ("confirmed") now takes its failure-mode flags from the milder
+  fault, so counts by failure mode include it (`sim_fail` stays set). Labels
+  (RISKY / OK) are unchanged.
+- `screen`: a borderline or solver-hard scenario left unsimulated because the
+  `--max-verify` budget ran out now reads "needs simulation (...), not yet
+  verified" instead of a plain OK.
+- Report: the "riskiest fault buses" line counts only buses with a RISKY
+  scenario and gives the count ("bus 6 (135 of 172 RISKY)"); unverified
+  verdicts are marked in amber; the trajectory animation also starts when the
+  browser does not report the section as visible.
+- IBR current plots show the reactive current after its lower limit, as the
+  converter applies it, and the axis extends when a current is above 1.15 pu.
+- `cct`: when a milder fault is still stable at the search limit, the text says
+  its CCT is above that limit.
+- `pandas` is capped below version 4 (pandas 3.1 already warns about changes
+  that ANDES 2.0.0 relies on).
+- Demo: the dashboard is the main page (with the explorer and quiz); the report
+  moves to `demo/report/`. Its overview says which counts come from the 5,000
+  sampled scenarios and which from the 37,120-run explorer set. Built from the same 5,000-scenario dataset (made
+  with 0.2.0), so it has no near-miss figures; the failure modes of confirmed
+  scenarios are read from their milder fault's reasons.
 - Colab notebook: the clearing-time sweep shows the tool's verdicts without the
   solver's own log messages.
 - Documentation: maintainer working notes removed from the repository;
   `examples/README.md` lists the examples.
+
+### Fixed
+- Pre-fault features (SCR, short-circuit level, electrical distances) now
+  convert line, transformer and machine impedances to the system base using the
+  equipment's rated voltage, as ANDES does. Cases where a rating differs from the
+  bus voltage (some PSS/E imports) gave wrong features; the IEEE 39-bus case is
+  unaffected (identical values).
+- Replacing a generator with an IBR checks the slack, the dispatch and the
+  step-up transformer before anything is removed, so a rejected request leaves
+  the case unchanged.
 
 ## [0.2.0] - 2026-10-24
 

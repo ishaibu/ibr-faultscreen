@@ -32,6 +32,8 @@ def ride_through_bands(rows):
     for r in rows:
         bands = set()
         for part in str(r.get("reasons", "")).split(" | "):
+            # a confirmed scenario lists its milder fault's reasons after "already RISKY: "
+            part = part.split("already RISKY: ", 1)[-1]
             m = _BAND.match(part)
             if m:
                 bands.add((m.group(1), m.group(2)))
@@ -91,7 +93,8 @@ def write_data_card(dataset_csv, path, plan=None, settings=None, criteria_source
          "- Scenarios: Latin hypercube over load level and clearing time, fault buses spread "
          "evenly, random IBR sets (see the sampling plan below). Same seed, same file."),
         "- Bolted faults (milder-fault check): a bolted fault that cannot be solved is rerun at milder "
-        "faults; `resolution` is `confirmed` (milder fault already RISKY) or `unresolved`.",
+        "faults; `resolution` is `confirmed` (milder fault already RISKY) or `unresolved`. A "
+        "confirmed scenario takes its failure-mode flags from the milder fault.",
         f"- Criteria file: {criteria_source or 'not recorded'}.",
         "",
         f"SHA-256 of dataset.csv: `{file_sha256(dataset_csv)}`",
@@ -106,6 +109,7 @@ def write_data_card(dataset_csv, path, plan=None, settings=None, criteria_source
                   f"{settings.v_recovery_time_s} s",
                   f"- Frequency: {settings.f_min_hz}-{settings.f_max_hz} Hz, measured over "
                   f"{settings.freq_window_s:g} s",
+                  f"- Ride-through counting: {settings.ride_through_counting}",
                   *[f"- Envelope `{e.name}`: {e.source}" for e in settings.envelopes], ""]
     lines += [
         "## Contents", "",
@@ -142,7 +146,9 @@ def write_data_card(dataset_csv, path, plan=None, settings=None, criteria_source
         "- Scenario: `scenario_id`, `case`, `load_scale`, `ibrs` (generator:kind), "
         "`fault_bus`, `clear_time_s`, `fault_x_pu`, `t_end_s`.",
         "- Outcome: `status`, `label`, `risky` (1/0), `resolution`, `flag_*` "
-        "(1 violated, 0 passed, empty not evaluated), `reasons`, `message`.",
+        "(1 violated, 0 passed, empty not evaluated), `rt_ratio_max` (largest share of an "
+        "allowed ride-through time used; 0.8 to 1 is a near miss, `inf` time where tripping is "
+        "permitted at once), `reasons`, `message`.",
         f"- Features (known before the fault): {', '.join(f'`{f}`' for f in FEATURES)}.",
         "- Diagnostics: `fault_residual_pu` (faulted-bus voltage during the fault), "
         "`diagnostic_runs`, `scr_by_ibr`.",

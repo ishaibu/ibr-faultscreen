@@ -49,3 +49,11 @@ def test_out_of_range_reported():
 def test_needs_a_fault():
     with pytest.raises(ValueError):
         critical_clearing_time(Scenario("nofault"))
+
+
+def test_search_limit_text():
+    from ibr_faultscreen.cct import CCTResult
+    r = CCTResult("c", "lower_bound", cct_s=None, stable_s=0.1, unstable_s=0.12,
+                  tolerance_s=0.004, had_sim_fail=True, upper_s=0.5, upper_x_pu=1e-3,
+                  upper_is_limit=True)
+    assert "above 500 ms (search limit)" in r.text()

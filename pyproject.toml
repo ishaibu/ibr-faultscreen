@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ibr-faultscreen"
-version = "0.2.0"
+version = "0.3.0"
 description = "Fault-scenario screening for grids with inverter-based resources"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,7 +20,7 @@ classifiers = [
 dependencies = [
     "andes>=2.0,<3",
     "matplotlib>=3.7",
-    "pandas>=2.0",
+    "pandas>=2.0,<4",
     "pyyaml>=6",
     "scikit-learn>=1.3",
 ]

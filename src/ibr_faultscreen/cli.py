@@ -8,6 +8,7 @@
     ibr-faultscreen train DATASET.csv       evaluate models honestly and train one
     ibr-faultscreen screen --model M        rank new scenarios, verify by simulation
     ibr-faultscreen report DATASET.csv      HTML report from a dataset or results file
+    ibr-faultscreen dashboard DATASET.csv   interactive dashboard from the same files
 
 Run any command with --help for its options.
 """
@@ -26,10 +27,21 @@ def _quiet():
     andes.config_logger(stream_level=50)
 
 
-def _criteria(path):
+def _criteria(path, counting=None):
+    """(settings, text naming their source). `counting` overrides the file's
+    ride_through_counting (per_band or nested)."""
+    from dataclasses import replace
+
     from .criteria import default_criteria_path, load_criteria
     p = path or default_criteria_path()
-    return load_criteria(p), str(path or "built-in PRC-029-1 file (illustrative non-standard limits)")
+    settings = load_criteria(p)
+    if counting:
+        settings = replace(settings, ride_through_counting=counting)
+    src = str(path or "built-in PRC-029 file (PRC-029-1 and -2 tables; illustrative non-standard "
+                      "angle, voltage-recovery and frequency limits)")
+    if settings.ride_through_counting != "per_band":
+        src += f"; ride-through counting: {settings.ride_through_counting}"
+    return settings, src
 
 
 def _open(path, flag):
@@ -78,7 +90,9 @@ def cmd_check(a):
     return 0 if rep.ok else 1
 
 
-def _run_scenarios(scenarios, settings, crit_src, out, plots, open_report, title, case, dyr):
+def _run_scenarios(scenarios, settings, crit_src, out, plots, open_report, title, case, dyr,
+                   open_dashboard=False):
+    from .dashboard import build_dashboard
     from .features import compute_features
     from .label import label
     from .plots import plot_scenario, trace_payload
@@ -106,25 +120,31 @@ def _run_scenarios(scenarios, settings, crit_src, out, plots, open_report, title
     rep = build_report(rows, out / "report.html", title=title, case=case, dyr=dyr,
                        criteria_source=crit_src, figures=top,
                        traces={k: traces[k] for k in top})
-    print(f"\nResults: {out / 'results.csv'}\nReport:  {rep}")
+    dash = build_dashboard(rows, out / "dashboard.html", title=title, case=case, dyr=dyr,
+                           criteria_source=crit_src, figures=top,
+                           traces={k: traces[k] for k in top},
+                           counting=settings.ride_through_counting)
+    print(f"\nResults:   {out / 'results.csv'}\nReport:    {rep}\nDashboard: {dash}")
     _open(rep, open_report)
+    _open(dash, open_dashboard)
     return 0
 
 
 def cmd_simulate(a):
     from .scenario import load_scenarios
     _quiet()
-    settings, src = _criteria(a.criteria)
+    settings, src = _criteria(a.criteria, a.rt_counting)
     scenarios = load_scenarios(a.scenarios)
     case = scenarios[0].case if scenarios else "ieee39"
     return _run_scenarios(scenarios, settings, src, Path(a.out), not a.no_plots, a.open,
-                          a.title, case, scenarios[0].dyr if scenarios else None)
+                          a.title, case, scenarios[0].dyr if scenarios else None,
+                          open_dashboard=a.open_dashboard)
 
 
 def cmd_example(a):
     from .scenario import FaultSpec, IBRSpec, Scenario
     _quiet()
-    settings, src = _criteria(None)
+    settings, src = _criteria(None, a.rt_counting)
     sc = [Scenario("E1_no_ibr_b16_6c", fault=FaultSpec(16, clear_time=0.1)),
           Scenario("E2_ibr2_b16_6c", ibrs=(IBRSpec(2),), fault=FaultSpec(16, clear_time=0.1)),
           Scenario("E3_ibr2_b6_9c", ibrs=(IBRSpec(2),), fault=FaultSpec(6, clear_time=0.15)),
@@ -134,14 +154,15 @@ def cmd_example(a):
                    fault=FaultSpec(26, clear_time=0.1))]
     print("Running 5 example scenarios on the IEEE 39-bus case (about a minute)...")
     return _run_scenarios(sc, settings, src, Path(a.out), True, not a.no_open,
-                          "IBR-FaultScreen example (IEEE 39-bus)", "ieee39", None)
+                          "IBR-FaultScreen example (IEEE 39-bus)", "ieee39", None,
+                          open_dashboard=a.dashboard and not a.no_open)
 
 
 def cmd_cct(a):
     from .cct import critical_clearing_time
     from .scenario import FaultSpec, Scenario
     _quiet()
-    settings, _ = _criteria(a.criteria)
+    settings, _ = _criteria(a.criteria, a.rt_counting)
     out = []
     for bus in a.bus:
         sc = Scenario(f"cct_b{bus}", case=a.case, dyr=a.dyr, load_scale=a.load,
@@ -162,6 +183,7 @@ def cmd_cct(a):
 def _cct_equal_area(sc, r, a, bus, settings):
     """Equal-area view just below and above the CCT (two more simulations)."""
     from dataclasses import replace
+
     from .equal_area import equal_area
     from .simulate import simulate
     runs = []
@@ -184,7 +206,7 @@ def _cct_equal_area(sc, r, a, bus, settings):
 
 def cmd_dataset(a):
     from .dataset import SamplingPlan, run_dataset, sample_scenarios
-    settings, src = _criteria(a.criteria)
+    settings, src = _criteria(a.criteria, a.rt_counting)
     kw = {"n": a.n, "seed": a.seed, "case": a.case, "max_ibrs": a.max_ibrs,
           "ibr_profile": a.ibr_profile,
           "clear_range_s": (a.clear_min, a.clear_max), "load_range": (a.load_min, a.load_max)}
@@ -255,6 +277,7 @@ def cmd_train(a):
 
 
 def cmd_screen(a):
+    from .dashboard import build_dashboard
     from .dataset import SamplingPlan, sample_scenarios
     from .model import load_bundle
     from .plots import plot_scenario, trace_payload
@@ -262,7 +285,7 @@ def cmd_screen(a):
     from .scenario import load_scenarios
     from .screen import all_risky_verified, screen
     _quiet()
-    settings, src = _criteria(a.criteria)
+    settings, src = _criteria(a.criteria, a.rt_counting)
     bundle = load_bundle(a.model)
     if a.scenarios:
         cands = load_scenarios(a.scenarios)
@@ -292,10 +315,16 @@ def cmd_screen(a):
                        case=cands[0].case if cands else "ieee39",
                        criteria_source=src, figures=figs, traces=traces,
                        model_card_md=card.read_text(encoding="utf-8") if card.exists() else None)
+    dash = build_dashboard(table, out / "dashboard.html", title="IBR-FaultScreen screening",
+                           case=cands[0].case if cands else "ieee39",
+                           criteria_source=src, figures=figs, traces=traces,
+                           model_card_md=card.read_text(encoding="utf-8") if card.exists() else None,
+                           counting=settings.ride_through_counting)
     print(f"Every RISKY verdict verified by simulation: "
           f"{'PASS' if all_risky_verified(rows) else 'FAIL'}")
-    print(f"Results: {out / 'screen.csv'}\nReport:  {rep}")
+    print(f"Results:   {out / 'screen.csv'}\nReport:    {rep}\nDashboard: {dash}")
     _open(rep, a.open)
+    _open(dash, a.open_dashboard)
     return 0
 
 
@@ -313,6 +342,35 @@ def cmd_report(a):
     return 0
 
 
+def cmd_dashboard(a):
+    from .dashboard import build_dashboard
+    with open(a.dataset, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    card = Path(a.model_card).read_text(encoding="utf-8") if a.model_card else None
+    model_eval = None
+    if a.evaluation:
+        import json
+        model_eval = json.loads(Path(a.evaluation).read_text(encoding="utf-8"))
+    cct_rows = None
+    if a.cct:
+        with open(a.cct, newline="", encoding="utf-8") as fh:
+            cct_rows = list(csv.DictReader(fh))
+    make_output_dir(Path(a.out).parent)
+    dash = build_dashboard(rows, a.out, title=a.title, case=a.case, dyr=a.dyr,
+                           criteria_source=a.criteria_note, model_card_md=card,
+                           model_eval=model_eval, cct_rows=cct_rows, dataset_note=a.note)
+    print(f"Dashboard: {dash}")
+    _open(dash, a.open)
+    return 0
+
+
+def _counting_arg(s):
+    s.add_argument("--rt-counting", choices=("per_band", "nested"),
+                   help="how ride-through time is counted across voltage bands (PRC-029 "
+                        "Attachment 1 note 7): per_band (default) or nested (more conservative); "
+                        "overrides the criteria file")
+
+
 # ------------------------------------------------------------------ parser
 
 def build_parser():
@@ -325,6 +383,9 @@ def build_parser():
     s = sub.add_parser("example", help="quick demo on the IEEE 39-bus case")
     s.add_argument("--out", default="example_output")
     s.add_argument("--no-open", action="store_true", help="do not open the report")
+    s.add_argument("--dashboard", action="store_true",
+                   help="also open the dashboard (always written as dashboard.html)")
+    _counting_arg(s)
     s.set_defaults(func=cmd_example)
 
     s = sub.add_parser("check", help="is a case ready for screening?")
@@ -334,11 +395,14 @@ def build_parser():
 
     s = sub.add_parser("simulate", help="run scenarios from a .yaml or .csv file")
     s.add_argument("scenarios")
-    s.add_argument("--criteria", help="criteria .yaml (default: built-in PRC-029-1 file)")
+    s.add_argument("--criteria", help="criteria .yaml (default: built-in PRC-029 file)")
     s.add_argument("--out", default="simulate_output")
     s.add_argument("--title", default="IBR-FaultScreen results")
     s.add_argument("--no-plots", action="store_true")
     s.add_argument("--open", action="store_true", help="open the report when done")
+    s.add_argument("--open-dashboard", action="store_true",
+                   help="open the dashboard when done (always written as dashboard.html)")
+    _counting_arg(s)
     s.set_defaults(func=cmd_simulate)
 
     s = sub.add_parser("cct", help="critical clearing time at one or more buses")
@@ -351,6 +415,7 @@ def build_parser():
     s.add_argument("--t-min", type=float, default=0.02)
     s.add_argument("--t-max", type=float, default=0.5)
     s.add_argument("--criteria")
+    _counting_arg(s)
     s.add_argument("--out", help="save results to this .csv (and an equal-area figure per bus)")
     s.add_argument("--no-equal-area", action="store_true",
                    help="skip the equal-area view just below and above the CCT")
@@ -374,6 +439,7 @@ def build_parser():
     s.add_argument("--workers", type=int, help="parallel processes (default: CPUs - 1)")
     s.add_argument("--timeout", type=float, default=300, help="seconds per scenario")
     s.add_argument("--criteria")
+    _counting_arg(s)
     s.add_argument("--out", default="dataset_output")
     s.set_defaults(func=cmd_dataset)
 
@@ -398,8 +464,11 @@ def build_parser():
                    help="always simulate fault buses with at least this share of unknown "
                         "outcomes in the training dataset (default: the model's value, 0.2)")
     s.add_argument("--criteria")
+    _counting_arg(s)
     s.add_argument("--out", default="screen_output")
-    s.add_argument("--open", action="store_true")
+    s.add_argument("--open", action="store_true", help="open the report when done")
+    s.add_argument("--open-dashboard", action="store_true",
+                   help="open the dashboard when done (always written as dashboard.html)")
     s.set_defaults(func=cmd_screen)
 
     s = sub.add_parser("report", help="HTML report from dataset.csv or results.csv")
@@ -413,6 +482,21 @@ def build_parser():
     s.add_argument("--note", default="")
     s.add_argument("--open", action="store_true")
     s.set_defaults(func=cmd_report)
+
+    s = sub.add_parser("dashboard", help="interactive dashboard from dataset.csv, results.csv "
+                                         "or screen.csv")
+    s.add_argument("dataset")
+    s.add_argument("--out", default="dashboard_output/dashboard.html")
+    s.add_argument("--title", default="IBR-FaultScreen dashboard")
+    s.add_argument("--case", default="ieee39")
+    s.add_argument("--dyr")
+    s.add_argument("--model-card", help="model-card.md from 'train'")
+    s.add_argument("--evaluation", help="evaluation.json from 'train' (Screening model view)")
+    s.add_argument("--cct", help="results .csv from 'cct --out' (Critical clearing time view)")
+    s.add_argument("--criteria-note", default="", help="text naming the criteria used")
+    s.add_argument("--note", default="", help="extra note for the Method view")
+    s.add_argument("--open", action="store_true")
+    s.set_defaults(func=cmd_dashboard)
     return p
 
 
